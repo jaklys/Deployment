@@ -3,7 +3,6 @@ param(
     [string]$ConfigFile,
     [ValidateSet("UAT1", "UAT2", "UAT3")]
     [string]$Destination,
-    [string]$AppPoolName
 )
 
 # Cesta k síťovému disku
@@ -70,3 +69,6 @@ Write-Host "Deployment completed"
 .\Deploy-NoleApp.ps1 -AppVersion "1.0.0" -Destination "UAT1" -AppPoolName "AppPoolUAT1"
 
 curl -X POST "https://<ra_server>/datamanagement/a/api/<api_version>/executions" -H "accept: application/json" -H "Content-Type: application/json" -H "Authorization: Bearer <api_token>" -d "{ \"applicationProcessId\": \"<process_id>\", \"environmentId\": \"<environment_id>\", \"applicationProcessProperties\": [ { \"name\": \"AppVersion\", \"value\": \"%AppVersion%\" }, { \"name\": \"ConfigFile\", \"value\": \"%ConfigFile%\" }, { \"name\": \"Destination\", \"value\": \"%Destination%\" }, { \"name\": \"AppPoolName\", \"value\": \"%AppPoolName%\" } ] }"
+
+
+-AppVersion "${AppVersion}" -Destination "${Destination}" 

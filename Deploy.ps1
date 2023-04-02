@@ -2,21 +2,33 @@ param(
     [string]$AppVersion,
     [string]$ConfigFile,
     [ValidateSet("Path1", "Path2", "Path3")]
-    [string]$TargetPath
+    [string]$Destination,
+    [string]$AppPoolName
 )
 
 # Cesta k síťovému disku
 $NetworkSharePath = "\\NetworkShare\NoleApp"
 
 # Předdefinované cesty na lokálním disku
-$LocalPaths = @{
-    "Path1" = "C:\NoleUAT_Path1"
-    "Path2" = "C:\NoleUAT_Path2"
-    "Path3" = "C:\NoleUAT_Path3"
-}
+$LocalPathUAT1 = "C:\NoleUAT\UAT1"
+$LocalPathUAT2 = "C:\NoleUAT\UAT2"
+$LocalPathUAT3 = "C:\NoleUAT\UAT3"
 
-# Vyberte cílovou cestu z předdefinovaných cest
-$LocalPath = $LocalPaths[$TargetPath]
+# Získání cílové cesty podle zvoleného předdefinovaného umístění
+switch ($Destination) {
+    "Path1" { 
+        $LocalPath = $LocalPathUAT1
+        $AppPoolName = "AppPoolUAT1"
+    }
+    "Path2" { 
+        $LocalPath = $LocalPathUAT2
+        $AppPoolName = "AppPoolUAT2"
+    }
+    "Path3" { 
+        $LocalPath = $LocalPathUAT3
+        $AppPoolName = "AppPoolUAT3"
+    }
+}
 
 # Import modulu pro práci s IIS
 Import-Module WebAdministration
@@ -33,7 +45,6 @@ function Restart-IISAppPool {
 }
 
 # Zastavení aplikace v IIS
-$AppPoolName = "NoleAppPool"
 Restart-IISAppPool -AppPoolName $AppPoolName
 
 # Smazání obsahu cílové složky

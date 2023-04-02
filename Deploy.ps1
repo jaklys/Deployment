@@ -1,7 +1,7 @@
 param(
     [string]$AppVersion,
     [string]$ConfigFile,
-    [ValidateSet("Path1", "Path2", "Path3")]
+    [ValidateSet("UAT1", "UAT2", "UAT3")]
     [string]$Destination,
     [string]$AppPoolName
 )
@@ -10,21 +10,21 @@ param(
 $NetworkSharePath = "\\NetworkShare\NoleApp"
 
 # Předdefinované cesty na lokálním disku
-$LocalPathUAT1 = "C:\NoleUAT\UAT1"
-$LocalPathUAT2 = "C:\NoleUAT\UAT2"
-$LocalPathUAT3 = "C:\NoleUAT\UAT3"
+$LocalPathUAT1 = "C:\UAT1"
+$LocalPathUAT2 = "C:\UAT2"
+$LocalPathUAT3 = "C:\UAT3"
 
 # Získání cílové cesty podle zvoleného předdefinovaného umístění
 switch ($Destination) {
-    "Path1" { 
+    "UAT1" { 
         $LocalPath = $LocalPathUAT1
         $AppPoolName = "AppPoolUAT1"
     }
-    "Path2" { 
+    "UAT2" { 
         $LocalPath = $LocalPathUAT2
         $AppPoolName = "AppPoolUAT2"
     }
-    "Path3" { 
+    "UAT3" { 
         $LocalPath = $LocalPathUAT3
         $AppPoolName = "AppPoolUAT3"
     }

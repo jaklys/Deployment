@@ -1,13 +1,22 @@
 param(
     [string]$AppVersion,
-    [string]$ConfigFile
+    [string]$ConfigFile,
+    [ValidateSet("Path1", "Path2", "Path3")]
+    [string]$TargetPath
 )
 
 # Cesta k síťovému disku
 $NetworkSharePath = "\\NetworkShare\NoleApp"
 
-# Cílová cesta na lokálním disku
-$LocalPath = "C:\NoleUAT"
+# Předdefinované cesty na lokálním disku
+$LocalPaths = @{
+    "Path1" = "C:\NoleUAT_Path1"
+    "Path2" = "C:\NoleUAT_Path2"
+    "Path3" = "C:\NoleUAT_Path3"
+}
+
+# Vyberte cílovou cestu z předdefinovaných cest
+$LocalPath = $LocalPaths[$TargetPath]
 
 # Import modulu pro práci s IIS
 Import-Module WebAdministration

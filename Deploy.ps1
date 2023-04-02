@@ -65,3 +65,7 @@ Copy-Item -Path $ConfigFilePath -Destination $LocalPath -Force
 Restart-IISAppPool -AppPoolName $AppPoolName
 
 Write-Host "Deployment completed"
+
+
+
+.\Deploy-NoleApp.ps1 -AppVersion "1.0.0" -ConfigFile "config1.xml" -Destination "U

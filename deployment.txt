@@ -61,3 +61,28 @@ action = { "push_iis": [push_iis.main_push] }
 
 # Příklad zavolání 'main_push' funkce
 action["push_iis"][0]("1.0.0", "UAT1")
+
+
+$env:SERVER_URL = "nolio1"
+$env:API_KEY = "ZAKODOVANY_RETEZEC_BASE64"
+
+$processId = "PROCESS_ID"
+$environmentId = "ENVIRONMENT_ID"
+$appVersion = "%APP_VERSION%"
+$destination = "%DESTINATION%"
+
+$basicAuth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f "", $env:API_KEY)))
+
+$parameters = @{
+  "AppVersion" = $appVersion
+  "Destination" = $destination
+}
+
+$json = @{
+  "processId" = $processId
+  "environmentId" = $environmentId
+  "params" = $parameters
+} | ConvertTo-Json
+
+Write-Host "Executing deployment plan..."
+Invoke-RestMethod -Uri "https://$env:SERVER_URL/datamanagement/a/api/v4/executions" -Method Post -Headers @{ Authorization = "Basic $basicAuth" } -Body $json

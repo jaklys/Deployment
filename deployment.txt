@@ -1,0 +1,63 @@
+import os
+import shutil
+import subprocess
+
+def main_push(AppVersion, Destination):
+    network_share_path = "\\\\NetworkShare\\NoleApp"
+
+    local_paths = {
+        "UAT1": "C:\\UAT1",
+        "UAT2": "C:\\UAT2",
+        "UAT3": "C:\\UAT3"
+    }
+
+    app_pool_names = {
+        "UAT1": "AppPoolUAT1",
+        "UAT2": "AppPoolUAT2",
+        "UAT3": "AppPoolUAT3"
+    }
+
+    local_path = local_paths[Destination]
+    app_pool_name = app_pool_names[Destination]
+
+    def restart_iis_app_pool(app_pool_name):
+        print(f"Restarting IIS Application Pool: {app_pool_name}")
+        subprocess.run(["appcmd", "stop", "apppool", app_pool_name])
+        subprocess.run(["appcmd", "start", "apppool", app_pool_name])
+
+    restart_iis_app_pool(app_pool_name)
+
+    print(f"Deleting content of {local_path}")
+    shutil.rmtree(local_path, ignore_errors=True)
+    os.makedirs(local_path, exist_ok=True)
+
+    source_path = os.path.join(network_share_path, AppVersion)
+    print(f"Copying files from {source_path} to {local_path}")
+    shutil.copytree(source_path, local_path, dirs_exist_ok=True)
+
+    restart_iis_app_pool(app_pool_name)
+
+    print("Deployment completed")
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-AppVersion", required=True)
+    parser.add_argument("-Destination", required=True, choices=["UAT1", "UAT2", "UAT3"])
+    args = parser.parse_args()
+
+    main_push(args.AppVersion, args.Destination)
+
+
+
+
+
+
+
+import push_iis
+
+action = { "push_iis": [push_iis.main_push] }
+
+# Příklad zavolání 'main_push' funkce
+action["push_iis"][0]("1.0.0", "UAT1")

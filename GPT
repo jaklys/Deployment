@@ -1,0 +1,39 @@
+Konfigurace Kestrelu pro HTTPS
+
+Kestrel může být konfigurován pro HTTPS v rámci souboru appsettings.json nebo pomocí kódu v rámci metody ConfigureWebHostDefaults v Program.cs. Zde je příklad konfigurace v appsettings.json:
+
+json
+
+{
+  "Kestrel": {
+    "EndPoints": {
+      "HttpsDefaultCert": {
+        "Url": "https://localhost:5001"
+      }
+    },
+    "Certificates": {
+      "Default": {
+        "Path": "<cesta-k-certifikatu>",
+        "Password": "<heslo-k-certifikatu>"
+      }
+    }
+  }
+}
+
+Nebo pomocí kódu v Program.cs:
+
+csharp
+
+public static IHostBuilder CreateHostBuilder(string[] args) =>
+    Host.CreateDefaultBuilder(args)
+        .ConfigureWebHostDefaults(webBuilder =>
+        {
+            webBuilder.UseStartup<Startup>()
+            .UseKestrel(options =>
+            {
+                options.ListenAnyIP(5001, listenOptions =>
+                {
+                    listenOptions.UseHttps("<cesta-k-certifikatu>", "<heslo-k-certifikatu>");
+                });
+            });
+        });

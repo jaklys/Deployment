@@ -55,3 +55,20 @@ catch {
 
 
 $extractedPart = $exeFileName -replace '^([^-\s]+-[^-\s]+).*$', '$1'
+
+Hello, here is the current status of the EF bundle. At present, steps have been added to the pipeline which generate the EF bundle and copy it to the shared remote driver. Then, an API call triggers a deployment, which in turn initiates the creation of the EF bundle with the appropriate parameters.
+
+For the entire flow to function, several prerequisites are required:
+
+    In the shared network drive, there is a Powershell script called RunEFBundle.ps. This script handles the correct copying of the EF bundle version from the shared network drive to the local server. Furthermore, it copies two files that are essential for the successful launch of the EF bundle - appsettings.json and log4net.conf.
+    This script also takes parameters from the NolioAgent (the name of the EF bundle's executable file and ENV). These parameters are defined by the Deployment name in the following format: NOLE~GL.main#640-EFBUNDLE*CustomString.
+    The script then launches the bundle in the correct version with the appropriate connection string based on the ENV.
+
+In the current pipeline we have for Nole in TC, everything functions automatically and is currently set for the UAT1 ENV. However, it is necessary to test whether the DB update works correctly when a schema change occurs. Hans Laubich has attempted this test, but there appears to be an issue that does not seem to be related to the TC settings, Nolio, or the Powershell script. However, it's crucial to investigate this.
+
+As for usage during the RELEASE,
+The logic is similar to when deploying the Nole application. It's necessary to create a Deployment from a predefined Deployment plan. We have one for deploying the Nole application and another for the EF bundle. Therefore, when creating these plans, you just need to input the required version, which is located on the SharedNetworkDriver, in the desired format, and then initiate the deployment by clicking the RUN button.
+
+The assignment of servers to individual ENVs (PROD and DR) in Nolio is complete. The only remaining task is to add the RunEFBundle process in version 1.0.5. This needs to be done by the RTB team, in a similar manner to what we did today.
+
+Due to preparations for the test release, I unfortunately didn't have time to create the pipeline for the Core component.

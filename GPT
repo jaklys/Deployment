@@ -52,3 +52,6 @@ catch {
     Write-Host "Chyba: $_"
     Exit 1
 }
+
+
+$extractedPart = $exeFileName -replace '^([^-\s]+-[^-\s]+).*$', '$1'

@@ -1,0 +1,16 @@
+# Aktualizace systému a instalace Zulu OpenJDK 11
+RUN yum update -y && \
+    yum install -y zulu-openjdk11 && \
+    yum clean all
+
+# Nalezení cesty k Zulu OpenJDK 11 a nastavení jako výchozí
+RUN JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) && \
+    update-alternatives --install /usr/bin/java java $JAVA_HOME/bin/java 20000 && \
+    update-alternatives --install /usr/bin/javac javac $JAVA_HOME/bin/javac 20000
+
+# Nastavení Zulu OpenJDK 11 jako výchozí verze Javy
+RUN update-alternatives --set java /usr/lib/jvm/zulu-11/bin/java && \
+    update-alternatives --set javac /usr/lib/jvm/zulu-11/bin/javac
+
+# Ověření aktuálně používané verze Javy
+RUN java -version && javac -version

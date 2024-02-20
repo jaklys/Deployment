@@ -1,81 +1,35 @@
-<%
-Dim hostMap, line, parts
-Set hostMap = Server.CreateObject("Scripting.Dictionary")
-
-' Otevření souboru pro čtení
-Dim fs, f
-Set fs = Server.CreateObject("Scripting.FileSystemObject")
-Set f = fs.OpenTextFile(Server.MapPath("map.txt"), 1, False)
-
-' Čtení souboru a naplnění mapy
-Do Until f.AtEndOfStream
-    line = f.ReadLine
-    parts = Split(line, ":")
-    If UBound(parts) = 2 Then
-        hostMap.Add parts(0), Array(parts(1), parts(2))
-    End If
-Loop
-
-f.Close
-Set f = Nothing
-Set fs = Nothing
-
-' Zde pokračujte s vaším kódem, který využívá hostMap
-%>
-
-<%
-Dim hostMap, xmlDoc, hosts, host
-Set hostMap = Server.CreateObject("Scripting.Dictionary")
-
-' Načtení XML
-Set xmlDoc = Server.CreateObject("Microsoft.XMLDOM")
-xmlDoc.Async = "false"
-xmlDoc.Load(Server.MapPath("map.xml"))
-
-' Extrahování hodnot do slovníku
-Set hosts = xmlDoc.getElementsByTagName("host")
-For Each host In hosts
-    hostMap.Add host.getAttribute("name"), Array(host.getAttribute("dns"), host.getAttribute("env"))
-Next
-
-' Zde pokračujte s vaším kódem, který využívá hostMap
-%>
-
-<hosts>
-    <host name="GPRTS0099883" dns="fiat-emeauat1" env="UAT1"/>
-    <host name="GPRTS0099884" dns="fiat-emeaprod" env="PROD"/>
-</hosts>
+{
+  "GPRTS0099883": {"dns": "fiat-emeauat1", "env": "UAT1"}
+}
 
 
-<%
-' Předpokládáme, že slovník `hostMap` je již naplněný z externího souboru
+<script>
+// Funkce pro načtení mapy z externího souboru
+function loadHostMap() {
+  fetch('map.json')
+    .then(response => response.json())
+    .then(data => {
+      var hostname = "GPRTS0099883"; // Tuto hodnotu naplníte dynamicky
+      var dns = "Nenalezeno";
+      var env = "Nenalezeno";
 
-' Získání hostname (v reálném případě byste získali hostname dynamicky, např. z requestu)
-Dim hostname
-hostname = "GPRTS0099883" ' Tento hodnota by byla dynamicky získána
+      if (data.hasOwnProperty(hostname)) {
+        dns = data[hostname].dns;
+        env = data[hostname].env;
+      }
 
-Dim dns, env
-If hostMap.Exists(hostname) Then
-    dns = hostMap(hostname)(0)
-    env = hostMap(hostname)(1)
-Else
-    dns = "Nenalezeno"
-    env = "Nenalezeno"
-End If
-%>
+      // Vložení hodnot do HTML
+      document.title = dns + " - " + env;
+      document.getElementById("dns").textContent = dns;
+      document.getElementById("env").textContent = env;
+    })
+    .catch(error => console.error('Chyba při načítání mapy:', error));
+}
 
-<!DOCTYPE html>
-<html>
-<head>
-    <title><%=dns%> - <%=env%></title>
-    <style>
-        /* Případné dynamické CSS zde */
-        body { font-family: Arial, sans-serif; }
-    </style>
-</head>
-<body>
-    <h1>Vítejte na stránce <%=dns%></h1>
-    <p>Prostředí: <%=env%></p>
-    <!-- Další HTML obsah -->
-</body>
-</html>
+// Volání funkce po načtení stránky
+document.addEventListener("DOMContentLoaded", loadHostMap);
+</script>
+
+
+<h1 id="dns">Default DNS</h1>
+<p id="env">Default ENV</p>

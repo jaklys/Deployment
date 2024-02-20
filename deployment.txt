@@ -1,88 +1,81 @@
-import os
-import shutil
-import subprocess
+<%
+Dim hostMap, line, parts
+Set hostMap = Server.CreateObject("Scripting.Dictionary")
 
-def main_push(AppVersion, Destination):
-    network_share_path = "\\\\NetworkShare\\NoleApp"
+' Otevření souboru pro čtení
+Dim fs, f
+Set fs = Server.CreateObject("Scripting.FileSystemObject")
+Set f = fs.OpenTextFile(Server.MapPath("map.txt"), 1, False)
 
-    local_paths = {
-        "UAT1": "C:\\UAT1",
-        "UAT2": "C:\\UAT2",
-        "UAT3": "C:\\UAT3"
-    }
+' Čtení souboru a naplnění mapy
+Do Until f.AtEndOfStream
+    line = f.ReadLine
+    parts = Split(line, ":")
+    If UBound(parts) = 2 Then
+        hostMap.Add parts(0), Array(parts(1), parts(2))
+    End If
+Loop
 
-    app_pool_names = {
-        "UAT1": "AppPoolUAT1",
-        "UAT2": "AppPoolUAT2",
-        "UAT3": "AppPoolUAT3"
-    }
+f.Close
+Set f = Nothing
+Set fs = Nothing
 
-    local_path = local_paths[Destination]
-    app_pool_name = app_pool_names[Destination]
+' Zde pokračujte s vaším kódem, který využívá hostMap
+%>
 
-    def restart_iis_app_pool(app_pool_name):
-        print(f"Restarting IIS Application Pool: {app_pool_name}")
-        subprocess.run(["appcmd", "stop", "apppool", app_pool_name])
-        subprocess.run(["appcmd", "start", "apppool", app_pool_name])
+<%
+Dim hostMap, xmlDoc, hosts, host
+Set hostMap = Server.CreateObject("Scripting.Dictionary")
 
-    restart_iis_app_pool(app_pool_name)
+' Načtení XML
+Set xmlDoc = Server.CreateObject("Microsoft.XMLDOM")
+xmlDoc.Async = "false"
+xmlDoc.Load(Server.MapPath("map.xml"))
 
-    print(f"Deleting content of {local_path}")
-    shutil.rmtree(local_path, ignore_errors=True)
-    os.makedirs(local_path, exist_ok=True)
+' Extrahování hodnot do slovníku
+Set hosts = xmlDoc.getElementsByTagName("host")
+For Each host In hosts
+    hostMap.Add host.getAttribute("name"), Array(host.getAttribute("dns"), host.getAttribute("env"))
+Next
 
-    source_path = os.path.join(network_share_path, AppVersion)
-    print(f"Copying files from {source_path} to {local_path}")
-    shutil.copytree(source_path, local_path, dirs_exist_ok=True)
+' Zde pokračujte s vaším kódem, který využívá hostMap
+%>
 
-    restart_iis_app_pool(app_pool_name)
-
-    print("Deployment completed")
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-AppVersion", required=True)
-    parser.add_argument("-Destination", required=True, choices=["UAT1", "UAT2", "UAT3"])
-    args = parser.parse_args()
-
-    main_push(args.AppVersion, args.Destination)
+<hosts>
+    <host name="GPRTS0099883" dns="fiat-emeauat1" env="UAT1"/>
+    <host name="GPRTS0099884" dns="fiat-emeaprod" env="PROD"/>
+</hosts>
 
 
+<%
+' Předpokládáme, že slovník `hostMap` je již naplněný z externího souboru
 
+' Získání hostname (v reálném případě byste získali hostname dynamicky, např. z requestu)
+Dim hostname
+hostname = "GPRTS0099883" ' Tento hodnota by byla dynamicky získána
 
+Dim dns, env
+If hostMap.Exists(hostname) Then
+    dns = hostMap(hostname)(0)
+    env = hostMap(hostname)(1)
+Else
+    dns = "Nenalezeno"
+    env = "Nenalezeno"
+End If
+%>
 
-
-
-import push_iis
-
-action = { "push_iis": [push_iis.main_push] }
-
-# Příklad zavolání 'main_push' funkce
-action["push_iis"][0]("1.0.0", "UAT1")
-
-
-$env:SERVER_URL = "nolio1"
-$env:API_KEY = "ZAKODOVANY_RETEZEC_BASE64"
-
-$processId = "PROCESS_ID"
-$environmentId = "ENVIRONMENT_ID"
-$appVersion = "%APP_VERSION%"
-$destination = "%DESTINATION%"
-
-$basicAuth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f "", $env:API_KEY)))
-
-$parameters = @{
-  "AppVersion" = $appVersion
-  "Destination" = $destination
-}
-
-$json = @{
-  "processId" = $processId
-  "environmentId" = $environmentId
-  "params" = $parameters
-} | ConvertTo-Json
-
-Write-Host "Executing deployment plan..."
-Invoke-RestMethod -Uri "https://$env:SERVER_URL/datamanagement/a/api/v4/executions" -Method Post -Headers @{ Authorization = "Basic $basicAuth" } -Body $json
+<!DOCTYPE html>
+<html>
+<head>
+    <title><%=dns%> - <%=env%></title>
+    <style>
+        /* Případné dynamické CSS zde */
+        body { font-family: Arial, sans-serif; }
+    </style>
+</head>
+<body>
+    <h1>Vítejte na stránce <%=dns%></h1>
+    <p>Prostředí: <%=env%></p>
+    <!-- Další HTML obsah -->
+</body>
+</html>

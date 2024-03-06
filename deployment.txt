@@ -1,35 +1,40 @@
-
-ChatGPT
-Chcete-li přidat funkcionalitu, která umožní uživatelům dvojklikem na řádek tabulky zaškrtnout nebo odškrtnout checkbox a zároveň změnit barvu pozadí řádku, můžete použít JavaScript spolu s několika CSS pravidly. Bulma je moderní CSS framework, ale pro tento případ bude potřeba trochu vlastního CSS pro zvýraznění řádků.
-
-Nejprve definujme CSS pravidlo pro zvýraznění řádku. Můžete přidat tento styl do hlavičky vaší HTML stránky nebo do externího CSS souboru:
-
-html
-Copy code
-<style>
-  .is-highlighted {
-    background-color: #00d1b2; /* Bulma "primary" color, případně si zvolte vlastní */
-  }
-</style>
-
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   // Přidání posluchače události na každý řádek v tabulce
   var tableRows = document.querySelectorAll('#myTable tr');
   
   tableRows.forEach(function(row) {
+    // Přidání posluchače pro dvojklik na řádek
     row.addEventListener('dblclick', function() {
-      // Přepnutí checkboxu
-      var checkbox = this.querySelector('input[type="checkbox"]');
-      checkbox.checked = !checkbox.checked;
-      
-      // Přepnutí třídy pro zvýraznění
-      if (checkbox.checked) {
-        this.classList.add('is-highlighted');
-      } else {
-        this.classList.remove('is-highlighted');
-      }
+      toggleCheckboxAndHighlight(row);
     });
+
+    // Přidání posluchače pro klik na checkbox v rámci řádku
+    var checkbox = row.querySelector('input[type="checkbox"]');
+    if (checkbox) {
+      checkbox.addEventListener('click', function(e) {
+        // Zabráníme vyvolání události dvojkliku na řádek
+        e.stopPropagation();
+        // Přepnutí zvýraznění bez změny stavu checkboxu, protože kliknutí na checkbox to udělá samo
+        toggleHighlight(row, checkbox.checked);
+      });
+    }
   });
+
+  function toggleCheckboxAndHighlight(row) {
+    var checkbox = row.querySelector('input[type="checkbox"]');
+    if (checkbox) {
+      checkbox.checked = !checkbox.checked; // Přepne stav checkboxu
+      toggleHighlight(row, checkbox.checked); // Přepne zvýraznění
+    }
+  }
+
+  function toggleHighlight(row, isChecked) {
+    if (isChecked) {
+      row.classList.add('has-background-primary');
+    } else {
+      row.classList.remove('has-background-primary');
+    }
+  }
 });
 </script>

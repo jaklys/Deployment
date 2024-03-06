@@ -1,35 +1,35 @@
-{
-  "GPRTS0099883": {"dns": "fiat-emeauat1", "env": "UAT1"}
-}
 
+ChatGPT
+Chcete-li přidat funkcionalitu, která umožní uživatelům dvojklikem na řádek tabulky zaškrtnout nebo odškrtnout checkbox a zároveň změnit barvu pozadí řádku, můžete použít JavaScript spolu s několika CSS pravidly. Bulma je moderní CSS framework, ale pro tento případ bude potřeba trochu vlastního CSS pro zvýraznění řádků.
+
+Nejprve definujme CSS pravidlo pro zvýraznění řádku. Můžete přidat tento styl do hlavičky vaší HTML stránky nebo do externího CSS souboru:
+
+html
+Copy code
+<style>
+  .is-highlighted {
+    background-color: #00d1b2; /* Bulma "primary" color, případně si zvolte vlastní */
+  }
+</style>
 
 <script>
-// Funkce pro načtení mapy z externího souboru
-function loadHostMap() {
-  fetch('map.json')
-    .then(response => response.json())
-    .then(data => {
-      var hostname = "GPRTS0099883"; // Tuto hodnotu naplníte dynamicky
-      var dns = "Nenalezeno";
-      var env = "Nenalezeno";
-
-      if (data.hasOwnProperty(hostname)) {
-        dns = data[hostname].dns;
-        env = data[hostname].env;
+document.addEventListener('DOMContentLoaded', function () {
+  // Přidání posluchače události na každý řádek v tabulce
+  var tableRows = document.querySelectorAll('#myTable tr');
+  
+  tableRows.forEach(function(row) {
+    row.addEventListener('dblclick', function() {
+      // Přepnutí checkboxu
+      var checkbox = this.querySelector('input[type="checkbox"]');
+      checkbox.checked = !checkbox.checked;
+      
+      // Přepnutí třídy pro zvýraznění
+      if (checkbox.checked) {
+        this.classList.add('is-highlighted');
+      } else {
+        this.classList.remove('is-highlighted');
       }
-
-      // Vložení hodnot do HTML
-      document.title = dns + " - " + env;
-      document.getElementById("dns").textContent = dns;
-      document.getElementById("env").textContent = env;
-    })
-    .catch(error => console.error('Chyba při načítání mapy:', error));
-}
-
-// Volání funkce po načtení stránky
-document.addEventListener("DOMContentLoaded", loadHostMap);
+    });
+  });
+});
 </script>
-
-
-<h1 id="dns">Default DNS</h1>
-<p id="env">Default ENV</p>

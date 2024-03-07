@@ -45,3 +45,41 @@ function updateRowHighlighting() {
 }
 
 </script>
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    let table = document.getElementById('myTable');
+    let dragging = false; // Flag pro detekci, zda uživatel "táhne"
+
+    table.addEventListener('mousedown', function(e) {
+        // Aktivujeme "táhnutí" pouze pokud bylo kliknuto na checkbox
+        if (e.target.type === 'checkbox') {
+            dragging = true;
+            // Přepneme checkbox na opačný stav
+            e.target.checked = !e.target.checked;
+            toggleRowHighlight(e.target.closest('tr'), e.target.checked);
+        }
+    });
+
+    table.addEventListener('mouseover', function(e) {
+        // Pokud "táhneme" a přejíždíme přes další checkboxy, přepínáme je
+        if (dragging && e.target.type === 'checkbox') {
+            e.target.checked = !e.target.checked;
+            toggleRowHighlight(e.target.closest('tr'), e.target.checked);
+        }
+    });
+
+    // Když uživatel pustí tlačítko myši kdekoli na stránce, zastavíme "táhnutí"
+    document.addEventListener('mouseup', function() {
+        dragging = false;
+    });
+
+    // Funkce pro přepnutí zvýraznění řádku
+    function toggleRowHighlight(row, isChecked) {
+        if (isChecked) {
+            row.classList.add('has-background-primary');
+        } else {
+            row.classList.remove('has-background-primary');
+        }
+    }
+});

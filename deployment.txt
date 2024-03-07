@@ -1,33 +1,23 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  // Přidání posluchače události na každý řádek v tabulce
+  var selectAllCheckbox = document.getElementById('selectAll');
   var tableRows = document.querySelectorAll('#myTable tr');
   
-  tableRows.forEach(function(row) {
-    // Přidání posluchače pro dvojklik na řádek
-    row.addEventListener('dblclick', function() {
-      toggleCheckboxAndHighlight(row);
-    });
-
-    // Přidání posluchače pro klik na checkbox v rámci řádku
-    var checkbox = row.querySelector('input[type="checkbox"]');
-    if (checkbox) {
-      checkbox.addEventListener('click', function(e) {
-        // Zabráníme vyvolání události dvojkliku na řádek
-        e.stopPropagation();
-        // Přepnutí zvýraznění bez změny stavu checkboxu, protože kliknutí na checkbox to udělá samo
-        toggleHighlight(row, checkbox.checked);
+  // Přidání posluchače události na hlavní checkbox
+  if (selectAllCheckbox) {
+    selectAllCheckbox.addEventListener('change', function() {
+      var isChecked = this.checked;
+      tableRows.forEach(function(row) {
+        var checkbox = row.querySelector('input[type="checkbox"]');
+        if (checkbox) {
+          checkbox.checked = isChecked; // Nastavení stavu všech checkboxů podle hlavního checkboxu
+          toggleHighlight(row, isChecked); // Zvýraznění nebo odzvýraznění řádků
+        }
       });
-    }
-  });
-
-  function toggleCheckboxAndHighlight(row) {
-    var checkbox = row.querySelector('input[type="checkbox"]');
-    if (checkbox) {
-      checkbox.checked = !checkbox.checked; // Přepne stav checkboxu
-      toggleHighlight(row, checkbox.checked); // Přepne zvýraznění
-    }
+    });
   }
+
+  // Posluchače pro řádky a checkboxy ve vaší tabulce (viz předchozí příklady)
 
   function toggleHighlight(row, isChecked) {
     if (isChecked) {

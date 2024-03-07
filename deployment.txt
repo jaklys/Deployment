@@ -1,81 +1,34 @@
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  var selectAllCheckbox = document.getElementById('selectAll');
-  var tableRows = document.querySelectorAll('#myTable tr');
-  
-  // Přidání posluchače události na hlavní checkbox
-  if (selectAllCheckbox) {
-    selectAllCheckbox.addEventListener('change', function() {
-      var isChecked = this.checked;
-      tableRows.forEach(function(row) {
-        var checkbox = row.querySelector('input[type="checkbox"]');
-        if (checkbox) {
-          checkbox.checked = isChecked; // Nastavení stavu všech checkboxů podle hlavního checkboxu
-          toggleHighlight(row, isChecked); // Zvýraznění nebo odzvýraznění řádků
-        }
-      });
-    });
-  }
-
-  // Posluchače pro řádky a checkboxy ve vaší tabulce (viz předchozí příklady)
-
-  function toggleHighlight(row, isChecked) {
-    if (isChecked) {
-      row.classList.add('has-background-primary');
-    } else {
-      row.classList.remove('has-background-primary');
-    }
-  }
-});
-
-function updateRowHighlighting() {
-    var tableRows = document.querySelectorAll('#myTable tr');
-  
-    tableRows.forEach(function(row) {
-        var checkbox = row.querySelector('input[type="checkbox"]');
-        if (checkbox) {
-            // Aktualizace zvýraznění řádku na základě stavu checkboxu
-            if (checkbox.checked) {
-                row.classList.add('has-background-primary');
-            } else {
-                row.classList.remove('has-background-primary');
-            }
-        }
-    });
-}
-
-</script>
-
-
 document.addEventListener('DOMContentLoaded', function() {
-    let table = document.getElementById('myTable');
-    let dragging = false; // Flag pro detekci, zda uživatel "táhne"
+    let isDragging = false;
 
-    table.addEventListener('mousedown', function(e) {
-        // Aktivujeme "táhnutí" pouze pokud bylo kliknuto na checkbox
-        if (e.target.type === 'checkbox') {
-            dragging = true;
-            // Přepneme checkbox na opačný stav
-            e.target.checked = !e.target.checked;
-            toggleRowHighlight(e.target.closest('tr'), e.target.checked);
-        }
+    document.querySelectorAll('#myTable tr').forEach(row => {
+        row.addEventListener('mousedown', (e) => {
+            // Aktivace táhnutí a zaškrtnutí checkboxu pouze pokud bylo kliknuto na checkbox
+            if (e.target.type === 'checkbox') {
+                isDragging = true;
+                // Nastavíme checkbox explicitně na zaškrtnutý
+                e.target.checked = true;
+                toggleRowHighlight(e.target.closest('tr'), true); // Přidání zvýraznění
+            }
+        });
+
+        row.addEventListener('mouseover', (e) => {
+            if (isDragging && e.target.type === 'checkbox') {
+                // Během táhnutí nastavíme checkboxy, přes které přejíždíme, na zaškrtnuté
+                e.target.checked = true;
+                toggleRowHighlight(e.target.closest('tr'), true); // Přidání zvýraznění
+            }
+        });
+
+        // Ukončení táhnutí při uvolnění tlačítka myši nad řádkem
+        row.addEventListener('mouseup', () => isDragging = false);
     });
 
-    table.addEventListener('mouseover', function(e) {
-        // Pokud "táhneme" a přejíždíme přes další checkboxy, přepínáme je
-        if (dragging && e.target.type === 'checkbox') {
-            e.target.checked = !e.target.checked;
-            toggleRowHighlight(e.target.closest('tr'), e.target.checked);
-        }
-    });
+    // Ukončení táhnutí po uvolnění tlačítka myši kdekoli na stránce
+    document.addEventListener('mouseup', () => isDragging = false);
 
-    // Když uživatel pustí tlačítko myši kdekoli na stránce, zastavíme "táhnutí"
-    document.addEventListener('mouseup', function() {
-        dragging = false;
-    });
-
-    // Funkce pro přepnutí zvýraznění řádku
     function toggleRowHighlight(row, isChecked) {
+        // Přidání nebo odebrání třídy pro zvýraznění podle stavu checkboxu
         if (isChecked) {
             row.classList.add('has-background-primary');
         } else {

@@ -1,38 +1,45 @@
 document.addEventListener('DOMContentLoaded', function() {
     let isDragging = false;
+    let draggingTimeout; // Proměnná pro uchování časovače
     let table = document.getElementById('myTable');
 
     table.addEventListener('mousedown', (e) => {
-        // Pokud kliknutí začíná uvnitř řádku tabulky, povolíme táhnutí
         let row = e.target.closest('tr');
         if (row) {
-            isDragging = true;
-            // Nastavíme stav checkboxu uvnitř tohoto řádku
-            let checkbox = row.querySelector('input[type="checkbox"]');
-            if (checkbox) {
-                checkbox.checked = true;
-                row.classList.add('has-background-primary'); // Přidání zvýraznění
-            }
-            e.preventDefault(); // Zabráníme dalším akcím, které by mohly být spuštěny
+            // Inicializace časovače
+            draggingTimeout = setTimeout(function() {
+                isDragging = true; // Aktivace táhnutí po uplynutí zpoždění
+                toggleCheckboxAndHighlight(row, true); // Zaškrtnutí a zvýraznění řádku
+            }, 1000); // 1 sekunda zpoždění
+            e.preventDefault();
         }
     });
 
     table.addEventListener('mouseover', (e) => {
-        // Pokud táhneme a přejíždíme přes jiné řádky
         if (isDragging) {
             let row = e.target.closest('tr');
             if (row) {
-                let checkbox = row.querySelector('input[type="checkbox"]');
-                if (checkbox) {
-                    checkbox.checked = true;
-                    row.classList.add('has-background-primary'); // Přidání zvýraznění
-                }
+                toggleCheckboxAndHighlight(row, true);
             }
         }
     });
 
     document.addEventListener('mouseup', () => {
-        // Konec táhnutí
-        isDragging = false;
+        clearTimeout(draggingTimeout); // Zrušení časovače při uvolnění tlačítka myši
+        if (isDragging) {
+            isDragging = false; // Deaktivace táhnutí
+        }
     });
+
+    function toggleCheckboxAndHighlight(row, isChecked) {
+        let checkbox = row.querySelector('input[type="checkbox"]');
+        if (checkbox) {
+            checkbox.checked = isChecked;
+            if (isChecked) {
+                row.classList.add('has-background-primary');
+            } else {
+                row.classList.remove('has-background-primary');
+            }
+        }
+    }
 });

@@ -27,4 +27,21 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 });
+
+function updateRowHighlighting() {
+    var tableRows = document.querySelectorAll('#myTable tr');
+  
+    tableRows.forEach(function(row) {
+        var checkbox = row.querySelector('input[type="checkbox"]');
+        if (checkbox) {
+            // Aktualizace zvýraznění řádku na základě stavu checkboxu
+            if (checkbox.checked) {
+                row.classList.add('has-background-primary');
+            } else {
+                row.classList.remove('has-background-primary');
+            }
+        }
+    });
+}
+
 </script>

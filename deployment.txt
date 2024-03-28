@@ -1,3 +1,24 @@
+
+<div class="container">
+    <div class="dropdown" id="emeaDropdown">
+        <div class="dropdown-trigger">
+            <button class="button" aria-haspopup="true" aria-controls="emeaDropdown-menu">
+                <span>Fiat EMEA</span>
+                <span class="icon is-small">
+                    <i class="fas fa-angle-down"></i>
+                </span>
+            </button>
+        </div>
+        <div class="dropdown-menu" id="emeaMenu" role="menu">
+            <div class="dropdown-content">
+                <!-- Dynamické položky menu budou zde -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Podobně pro APAC a NoteOne dropdowns -->
+</div>
+
 document.addEventListener('DOMContentLoaded', function() {
     // Načítání dat z JSON souboru a vyplnění menu
     fetch('environments.json')

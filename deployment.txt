@@ -1,136 +1,39 @@
 document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('searchInput');
-    
-    searchInput.addEventListener('input', function() {
-        const searchValue = this.value;
-        try {
-            const regex = new RegExp(searchValue, 'i'); // 'i' pro case-insensitive hledání
-            const tableRows = document.querySelectorAll('#myTable tr');
-            
-            tableRows.forEach(row => {
-                // Předpokládáme, že každý řádek má několik buněk s textem
-                const cellsText = Array.from(row.cells).map(cell => cell.textContent).join(' ');
-                if (regex.test(cellsText)) {
-                    row.style.display = ''; // Řádek odpovídá výrazu, zobrazíme ho
-                } else {
-                    row.style.display = 'none'; // Řádek neodpovídá výrazu, skryjeme ho
-                }
-            });
-        } catch(e) {
-            console.error('Chybný regulární výraz:', e);
-            // Zde můžete přidat logiku pro ošetření chybného výrazu, např. zobrazení všech řádků
-        }
-    });
-});
-
-document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('searchInput');
-    const errorMessage = document.getElementById('errorMessage');
-    
-    searchInput.addEventListener('input', function() {
-        const searchValue = this.value;
-        errorMessage.style.display = 'none'; // Skrytí chybové zprávy při novém vstupu
-
-        try {
-            const regex = new RegExp(searchValue, 'i');
-            
-            // Zde by pokračoval váš kód pro vyhledávání pomocí regexu
-        } catch(e) {
-            errorMessage.textContent = 'Zadaný výraz není validní regulární výraz.';
-            errorMessage.style.display = ''; // Zobrazení chybové zprávy
-        }
-    });
-});
-
-# Define the path to the folder from which files will be copied
-# This script is assumed to be run from the location Root repository/NodeRunnerWeb
-$sourceFolder = Join-Path -Path $PSScriptRoot -ChildPath "NodeRunnerWebNew"
-
-# List of paths to remote folders where files will be copied
-$destinationFolders = @(
-    "\\RemotePC1\SharedFolder",
-    "\\RemotePC2\SharedFolder",
-    "\\RemotePC3\SharedFolder"
-)
-
-# Iterate through all remote folders and copy files into them
-foreach ($destFolder in $destinationFolders) {
-    # Check if the target folder exists
-    if (Test-Path $destFolder) {
-        # Copying files with the -Force switch to overwrite existing files
-        Copy-Item -Path "$sourceFolder\*" -Destination $destFolder -Recurse -Force
-        Write-Host "Files have been successfully copied to $destFolder."
-    } else {
-        Write-Host "The target folder $destFolder was not found."
-    }
-}
-
-
-<div class="container">
-    <div id="emeaDropdown" class="dropdown">
-        <div class="dropdown-trigger">
-            <button class="button" aria-haspopup="true" aria-controls="emeaDropdown-menu">
-                <span>Fiat EMEA</span>
-                <span class="icon is-small">
-                    <i class="fas fa-angle-down" aria-hidden="true"></i>
-                </span>
-            </button>
-        </div>
-        <div class="dropdown-menu" id="emeaDropdown-menu" role="menu">
-            <div class="dropdown-content" id="emeaMenu">
-                <!-- Odkazy budou přidány dynamicky pomocí JavaScriptu -->
-            </div>
-        </div>
-    </div>
-
-    <div id="apacDropdown" class="dropdown">
-        <div class="dropdown-trigger">
-            <button class="button" aria-haspopup="true" aria-controls="apacDropdown-menu">
-                <span>Fiat APAC</span>
-                <span class="icon is-small">
-                    <i class="fas fa-angle-down" aria-hidden="true"></i>
-                </span>
-            </button>
-        </div>
-        <div class="dropdown-menu" id="apacDropdown-menu" role="menu">
-            <div class="dropdown-content" id="apacMenu">
-                <!-- Odkazy budou přidány dynamicky pomocí JavaScriptu -->
-            </div>
-        </div>
-    </div>
-
-    <!-- Podobně přidejte dropdown menu pro NoteOne -->
-</div>
-
-document.addEventListener('DOMContentLoaded', () => {
-    // Přidejte event listener pro všechny dropdown triggery
-    document.querySelectorAll('.dropdown-trigger button').forEach(trigger => {
-        trigger.addEventListener('click', () => {
-            // Přepínání třídy 'is-active' na dropdown komponentě
-            const dropdown = trigger.closest('.dropdown');
-            dropdown.classList.toggle('is-active');
-        });
-    });
-});
-
-function loadEnvironments() {
+    // Načítání dat z JSON souboru a vyplnění menu
     fetch('environments.json')
     .then(response => response.json())
     .then(data => {
-        // Iterace skrz načtená data a přidání odkazů do příslušných menu
         Object.entries(data).forEach(([key, value]) => {
-            let option = new Option(value.env, `http://${value.dns}:82/Monitor.asp`);
+            // Vytvoření položky menu
+            let menuItem = document.createElement('a');
+            menuItem.href = `http://${value.dns}:82/Monitor.asp`; // Nastavení odkazu
+            menuItem.classList.add('dropdown-item'); // Přidání správné třídy
+            menuItem.textContent = value.env; // Text položky menu
+            
+            // Rozhodnutí, do kterého menu položku přidat
             if (value.dns.includes('fiat-emea')) {
-                document.getElementById('emeaMenu').appendChild(option);
+                document.querySelector('#emeaDropdown .dropdown-content').appendChild(menuItem);
             } else if (value.dns.includes('fiat-apac')) {
-                document.getElementById('apacMenu').appendChild(option);
-            } else if (value.dns.includes('n1')) {
-                document.getElementById('noteOneMenu').appendChild(option);
-            }
+                // Přidejte položku do APAC menu podobně
+            } // Podobně pro NoteOne
         });
-    })
-    .catch(error => console.error('Error loading the JSON data:', error));
-}
+    });
 
-// Spustění funkce po načtení stránky
-document.addEventListener('DOMContentLoaded', loadEnvironments);
+    // Přidání funkcionality pro otevírání/zavírání dropdown menu
+    document.querySelectorAll('.dropdown-trigger button').forEach(trigger => {
+        trigger.addEventListener('click', function(event) {
+            event.stopPropagation(); // Zastaví propagaci události, aby se předešlo zavření menu při kliknutí
+            let dropdown = this.closest('.dropdown');
+            dropdown.classList.toggle('is-active');
+        });
+    });
+
+    // Zavření dropdown menu při kliknutí mimo menu
+    document.addEventListener('click', function(event) {
+        if (!event.target.matches('.dropdown-trigger button')) {
+            document.querySelectorAll('.dropdown').forEach(function(dropdown) {
+                dropdown.classList.remove('is-active');
+            });
+        }
+    });
+});

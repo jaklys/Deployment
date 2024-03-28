@@ -64,3 +64,73 @@ foreach ($destFolder in $destinationFolders) {
         Write-Host "The target folder $destFolder was not found."
     }
 }
+
+
+<div class="container">
+    <div id="emeaDropdown" class="dropdown">
+        <div class="dropdown-trigger">
+            <button class="button" aria-haspopup="true" aria-controls="emeaDropdown-menu">
+                <span>Fiat EMEA</span>
+                <span class="icon is-small">
+                    <i class="fas fa-angle-down" aria-hidden="true"></i>
+                </span>
+            </button>
+        </div>
+        <div class="dropdown-menu" id="emeaDropdown-menu" role="menu">
+            <div class="dropdown-content" id="emeaMenu">
+                <!-- Odkazy budou přidány dynamicky pomocí JavaScriptu -->
+            </div>
+        </div>
+    </div>
+
+    <div id="apacDropdown" class="dropdown">
+        <div class="dropdown-trigger">
+            <button class="button" aria-haspopup="true" aria-controls="apacDropdown-menu">
+                <span>Fiat APAC</span>
+                <span class="icon is-small">
+                    <i class="fas fa-angle-down" aria-hidden="true"></i>
+                </span>
+            </button>
+        </div>
+        <div class="dropdown-menu" id="apacDropdown-menu" role="menu">
+            <div class="dropdown-content" id="apacMenu">
+                <!-- Odkazy budou přidány dynamicky pomocí JavaScriptu -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Podobně přidejte dropdown menu pro NoteOne -->
+</div>
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Přidejte event listener pro všechny dropdown triggery
+    document.querySelectorAll('.dropdown-trigger button').forEach(trigger => {
+        trigger.addEventListener('click', () => {
+            // Přepínání třídy 'is-active' na dropdown komponentě
+            const dropdown = trigger.closest('.dropdown');
+            dropdown.classList.toggle('is-active');
+        });
+    });
+});
+
+function loadEnvironments() {
+    fetch('environments.json')
+    .then(response => response.json())
+    .then(data => {
+        // Iterace skrz načtená data a přidání odkazů do příslušných menu
+        Object.entries(data).forEach(([key, value]) => {
+            let option = new Option(value.env, `http://${value.dns}:82/Monitor.asp`);
+            if (value.dns.includes('fiat-emea')) {
+                document.getElementById('emeaMenu').appendChild(option);
+            } else if (value.dns.includes('fiat-apac')) {
+                document.getElementById('apacMenu').appendChild(option);
+            } else if (value.dns.includes('n1')) {
+                document.getElementById('noteOneMenu').appendChild(option);
+            }
+        });
+    })
+    .catch(error => console.error('Error loading the JSON data:', error));
+}
+
+// Spustění funkce po načtení stránky
+document.addEventListener('DOMContentLoaded', loadEnvironments);

@@ -41,3 +41,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+# Cesta k lokální složce, ze které budou soubory kopírovány
+$sourceFolder = "C:\LocalFolder"
+
+# Seznam cest k vzdáleným složkám, kam budou soubory kopírovány
+$destinationFolders = @(
+    "\\RemotePC1\SharedFolder",
+    "\\RemotePC2\SharedFolder",
+    "\\RemotePC3\SharedFolder"
+)
+
+# Projděte všechny vzdálené složky a kopírujte do nich soubory
+foreach ($destFolder in $destinationFolders) {
+    # Kontrola, zda cílová složka existuje
+    if (Test-Path $destFolder) {
+        # Kopírování souborů
+        Copy-Item -Path "$sourceFolder\*" -Destination $destFolder -Recurse -Force
+        Write-Host "Soubory byly úspěšně zkopírovány do $destFolder."
+    } else {
+        Write-Host "Cílová složka $destFolder nebyla nalezena."
+    }
+}

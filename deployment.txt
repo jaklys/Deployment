@@ -42,24 +42,25 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-# Cesta k lokální složce, ze které budou soubory kopírovány
-$sourceFolder = "C:\LocalFolder"
+# Define the path to the folder from which files will be copied
+# This script is assumed to be run from the location Root repository/NodeRunnerWeb
+$sourceFolder = Join-Path -Path $PSScriptRoot -ChildPath "NodeRunnerWebNew"
 
-# Seznam cest k vzdáleným složkám, kam budou soubory kopírovány
+# List of paths to remote folders where files will be copied
 $destinationFolders = @(
     "\\RemotePC1\SharedFolder",
     "\\RemotePC2\SharedFolder",
     "\\RemotePC3\SharedFolder"
 )
 
-# Projděte všechny vzdálené složky a kopírujte do nich soubory
+# Iterate through all remote folders and copy files into them
 foreach ($destFolder in $destinationFolders) {
-    # Kontrola, zda cílová složka existuje
+    # Check if the target folder exists
     if (Test-Path $destFolder) {
-        # Kopírování souborů
+        # Copying files with the -Force switch to overwrite existing files
         Copy-Item -Path "$sourceFolder\*" -Destination $destFolder -Recurse -Force
-        Write-Host "Soubory byly úspěšně zkopírovány do $destFolder."
+        Write-Host "Files have been successfully copied to $destFolder."
     } else {
-        Write-Host "Cílová složka $destFolder nebyla nalezena."
+        Write-Host "The target folder $destFolder was not found."
     }
 }

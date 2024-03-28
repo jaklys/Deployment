@@ -1,58 +1,24 @@
 document.addEventListener('DOMContentLoaded', function() {
-    let isDragging = false;
-    let draggingTimeout; // Proměnná pro uchování časovače
-    let table = document.getElementById('myTable');
-
-    table.addEventListener('mousedown', (e) => {
-        let row = e.target.closest('tr');
-        if (row) {
-            // Nastavíme dočasný flag pro indikaci, že uživatel začal táhnout na řádku s checkboxem
-            let initialCheckbox = row.querySelector('input[type="checkbox"]');
-            if (initialCheckbox) {
-                initialCheckbox._isInitiallyChecked = !initialCheckbox.checked; // Uložíme opačnou hodnotu stavu
-                toggleCheckboxAndHighlight(row, initialCheckbox._isInitiallyChecked); // První akce založená na opačném stavu
-            }
+    const searchInput = document.getElementById('searchInput');
+    
+    searchInput.addEventListener('input', function() {
+        const searchValue = this.value;
+        try {
+            const regex = new RegExp(searchValue, 'i'); // 'i' pro case-insensitive hledání
+            const tableRows = document.querySelectorAll('#myTable tr');
             
-            draggingTimeout = setTimeout(function() {
-                isDragging = true; // Aktivace táhnutí po uplynutí zpoždění
-            }, 1000); // 1 sekunda zpoždění
-            e.preventDefault();
-        }
-    });
-
-    table.addEventListener('mouseover', (e) => {
-        if (isDragging || e.target.closest('tr').querySelector('input[type="checkbox"]')._isInitiallyChecked !== undefined) {
-            let row = e.target.closest('tr');
-            if (row) {
-                let checkbox = row.querySelector('input[type="checkbox"]');
-                if (checkbox) {
-                    // Toggle na základě předchozího stavu, pokud už táhnutí začalo nebo bylo aktivováno před časovačem
-                    let shouldBeChecked = (checkbox._isInitiallyChecked !== undefined) ? checkbox._isInitiallyChecked : !checkbox.checked;
-                    toggleCheckboxAndHighlight(row, shouldBeChecked);
-                    delete checkbox._isInitiallyChecked; // Odstranění dočasného flagu
+            tableRows.forEach(row => {
+                // Předpokládáme, že každý řádek má několik buněk s textem
+                const cellsText = Array.from(row.cells).map(cell => cell.textContent).join(' ');
+                if (regex.test(cellsText)) {
+                    row.style.display = ''; // Řádek odpovídá výrazu, zobrazíme ho
+                } else {
+                    row.style.display = 'none'; // Řádek neodpovídá výrazu, skryjeme ho
                 }
-            }
+            });
+        } catch(e) {
+            console.error('Chybný regulární výraz:', e);
+            // Zde můžete přidat logiku pro ošetření chybného výrazu, např. zobrazení všech řádků
         }
     });
-
-    document.addEventListener('mouseup', () => {
-        clearTimeout(draggingTimeout); // Zrušení časovače při uvolnění tlačítka myši
-        isDragging = false; // Deaktivace táhnutí
-        // Odstranění všech dočasných flagů _isInitiallyChecked
-        document.querySelectorAll('#myTable input[type="checkbox"]').forEach(checkbox => {
-            delete checkbox._isInitiallyChecked;
-        });
-    });
-
-    function toggleCheckboxAndHighlight(row, shouldBeChecked) {
-        let checkbox = row.querySelector('input[type="checkbox"]');
-        if (checkbox && checkbox.checked !== shouldBeChecked) {
-            checkbox.checked = shouldBeChecked; // Nastavení checkboxu
-            if (shouldBeChecked) {
-                row.classList.add('has-background-primary');
-            } else {
-                row.classList.remove('has-background-primary');
-            }
-        }
-    }
 });

@@ -22,3 +22,22 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const errorMessage = document.getElementById('errorMessage');
+    
+    searchInput.addEventListener('input', function() {
+        const searchValue = this.value;
+        errorMessage.style.display = 'none'; // Skrytí chybové zprávy při novém vstupu
+
+        try {
+            const regex = new RegExp(searchValue, 'i');
+            
+            // Zde by pokračoval váš kód pro vyhledávání pomocí regexu
+        } catch(e) {
+            errorMessage.textContent = 'Zadaný výraz není validní regulární výraz.';
+            errorMessage.style.display = ''; // Zobrazení chybové zprávy
+        }
+    });
+});

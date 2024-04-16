@@ -1,4 +1,3 @@
-import subprocess
 from collections import defaultdict
 import re
 
@@ -10,28 +9,31 @@ def test_dns_balancing(domains, num_requests=10):
 
         for _ in range(num_requests):
             try:
-                # Spustíme nslookup pro zadaný domain
+                # Execute nslookup for the given domain
                 result = subprocess.run(['nslookup', domain], capture_output=True, text=True)
                 output = result.stdout
-                
-                # Získáme IP adresy z části "Non-authoritative answer"
-                ips = re.findall(r'Name:\s+{}\nAddress:\s+(\S+)'.format(domain), output)
 
-                for ip in ips:
+                # Extract the IP address from the "Non-authoritative answer" section
+                # The regex filters only the IP addresses after "Non-authoritative answer"
+                match = re.search(r'Non-authoritative answer:\s*Name:\s+[^\s]+\s*Address:\s+(\S+)', output)
+                if match:
+                    ip = match.group(1)
                     ip_count[ip] += 1
+                else:
+                    print("No IP address found in 'Non-authoritative answer'")
                     
             except subprocess.SubprocessError as e:
-                print(f'Při provádění nslookup došlo k chybě: {e}')
+                print(f'An error occurred while executing nslookup: {e}')
         
-        # Uložíme výsledky pro danou doménu
+        # Store results for the given domain
         results[domain] = ip_count
 
-    # Výpis výsledků pro všechny testované domény
+    # Print the results for all tested domains
     for domain, counts in results.items():
-        print(f'Výsledky pro doménu {domain}:')
+        print(f'Results for domain {domain}:')
         for ip, count in counts.items():
-            print(f'  IP adresa {ip} byla vrácena {count} krát z {num_requests} requestů.')
-        print()  # Nový řádek pro lepší přehlednost
+            print(f'  IP address {ip} was returned {count} times out of {num_requests} requests.')
+        print()  # New line for better readability
 
-# Použití funkce
-test_dns_balancing(['example.com', 'google.com'], num_requests=20)
+# Use the function
+test_dns_balancing(['fiat-emeaprod-1b-halo'], num_requests=20)

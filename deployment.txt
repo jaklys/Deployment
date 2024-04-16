@@ -1,3 +1,4 @@
+import subprocess
 from collections import defaultdict
 import re
 
@@ -13,12 +14,15 @@ def test_dns_balancing(domains, num_requests=10):
                 result = subprocess.run(['nslookup', domain], capture_output=True, text=True)
                 output = result.stdout
 
-                # Extract the IP address from the "Non-authoritative answer" section
-                # The regex filters only the IP addresses after "Non-authoritative answer"
-                match = re.search(r'Non-authoritative answer:\s*Name:\s+[^\s]+\s*Address:\s+(\S+)', output)
-                if match:
-                    ip = match.group(1)
-                    ip_count[ip] += 1
+                # Extract the IP addresses from the "Non-authoritative answer" section
+                matches = re.findall(r'Address:\s+(\S+)', output)
+                if matches:
+                    # The first address is typically the DNS server's, subsequent ones are the queried domain's
+                    if len(matches) > 1:
+                        ip = matches[1]  # Get the second IP address, which should be the target domain's IP
+                        ip_count[ip] += 1
+                    else:
+                        print("No additional IP address found")
                 else:
                     print("No IP address found in 'Non-authoritative answer'")
                     

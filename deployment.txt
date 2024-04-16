@@ -1,60 +1,37 @@
+import subprocess
+from collections import defaultdict
+import re
 
-<div class="container">
-    <div class="dropdown" id="emeaDropdown">
-        <div class="dropdown-trigger">
-            <button class="button" aria-haspopup="true" aria-controls="emeaDropdown-menu">
-                <span>Fiat EMEA</span>
-                <span class="icon is-small">
-                    <i class="fas fa-angle-down"></i>
-                </span>
-            </button>
-        </div>
-        <div class="dropdown-menu" id="emeaMenu" role="menu">
-            <div class="dropdown-content">
-                <!-- Dynamické položky menu budou zde -->
-            </div>
-        </div>
-    </div>
+def test_dns_balancing(domains, num_requests=10):
+    results = {}
 
-    <!-- Podobně pro APAC a NoteOne dropdowns -->
-</div>
+    for domain in domains:
+        ip_count = defaultdict(int)
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Načítání dat z JSON souboru a vyplnění menu
-    fetch('environments.json')
-    .then(response => response.json())
-    .then(data => {
-        Object.entries(data).forEach(([key, value]) => {
-            // Vytvoření položky menu
-            let menuItem = document.createElement('a');
-            menuItem.href = `http://${value.dns}:82/Monitor.asp`; // Nastavení odkazu
-            menuItem.classList.add('dropdown-item'); // Přidání správné třídy
-            menuItem.textContent = value.env; // Text položky menu
-            
-            // Rozhodnutí, do kterého menu položku přidat
-            if (value.dns.includes('fiat-emea')) {
-                document.querySelector('#emeaDropdown .dropdown-content').appendChild(menuItem);
-            } else if (value.dns.includes('fiat-apac')) {
-                // Přidejte položku do APAC menu podobně
-            } // Podobně pro NoteOne
-        });
-    });
+        for _ in range(num_requests):
+            try:
+                # Spustíme nslookup pro zadaný domain
+                result = subprocess.run(['nslookup', domain], capture_output=True, text=True)
+                output = result.stdout
+                
+                # Získáme IP adresy z části "Non-authoritative answer"
+                ips = re.findall(r'Name:\s+{}\nAddress:\s+(\S+)'.format(domain), output)
 
-    // Přidání funkcionality pro otevírání/zavírání dropdown menu
-    document.querySelectorAll('.dropdown-trigger button').forEach(trigger => {
-        trigger.addEventListener('click', function(event) {
-            event.stopPropagation(); // Zastaví propagaci události, aby se předešlo zavření menu při kliknutí
-            let dropdown = this.closest('.dropdown');
-            dropdown.classList.toggle('is-active');
-        });
-    });
+                for ip in ips:
+                    ip_count[ip] += 1
+                    
+            except subprocess.SubprocessError as e:
+                print(f'Při provádění nslookup došlo k chybě: {e}')
+        
+        # Uložíme výsledky pro danou doménu
+        results[domain] = ip_count
 
-    // Zavření dropdown menu při kliknutí mimo menu
-    document.addEventListener('click', function(event) {
-        if (!event.target.matches('.dropdown-trigger button')) {
-            document.querySelectorAll('.dropdown').forEach(function(dropdown) {
-                dropdown.classList.remove('is-active');
-            });
-        }
-    });
-});
+    # Výpis výsledků pro všechny testované domény
+    for domain, counts in results.items():
+        print(f'Výsledky pro doménu {domain}:')
+        for ip, count in counts.items():
+            print(f'  IP adresa {ip} byla vrácena {count} krát z {num_requests} requestů.')
+        print()  # Nový řádek pro lepší přehlednost
+
+# Použití funkce
+test_dns_balancing(['example.com', 'google.com'], num_requests=20)

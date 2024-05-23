@@ -1,43 +1,11 @@
-import subprocess
-from collections import defaultdict
-import re
+Dear [Recipient's Name],
 
-def test_dns_balancing(domains, num_requests=10):
-    results = {}
+I hope this message finds you well. I am writing to request urgent business approval to implement a Change Request (CR) necessary for the initial configuration and installation of two new servers. These servers are intended to be added to our existing production environment.
 
-    for domain in domains:
-        ip_count = defaultdict(int)
+Currently, these two servers are isolated from the production environment, and we need to approve the CR to continuously work on their installation and configuration. The primary reason for this urgency is the ongoing issue in our production environment, specifically with the ParamService application, which is struggling to handle the current load of incoming requests. By adding these two new servers, we aim to distribute the load evenly across all servers, thus preventing service outages or downtimes.
 
-        for _ in range(num_requests):
-            try:
-                # Execute nslookup for the given domain
-                result = subprocess.run(['nslookup', domain], capture_output=True, text=True)
-                output = result.stdout
+Given the critical nature of this issue, it is imperative that we deploy these new servers as soon as possible. Therefore, I kindly request your prompt approval of this CR. Additionally, I would appreciate it if you could also grant pre-approval for any subsequent CRs related to this issue, in case we are unable to complete all necessary tasks within the scope of this initial CR.
 
-                # Extract the IP addresses from the "Non-authoritative answer" section
-                matches = re.findall(r'Address:\s+(\S+)', output)
-                if matches:
-                    # The first address is typically the DNS server's, subsequent ones are the queried domain's
-                    if len(matches) > 1:
-                        ip = matches[1]  # Get the second IP address, which should be the target domain's IP
-                        ip_count[ip] += 1
-                    else:
-                        print("No additional IP address found")
-                else:
-                    print("No IP address found in 'Non-authoritative answer'")
-                    
-            except subprocess.SubprocessError as e:
-                print(f'An error occurred while executing nslookup: {e}')
-        
-        # Store results for the given domain
-        results[domain] = ip_count
+Thank you for your immediate attention to this matter.
 
-    # Print the results for all tested domains
-    for domain, counts in results.items():
-        print(f'Results for domain {domain}:')
-        for ip, count in counts.items():
-            print(f'  IP address {ip} was returned {count} times out of {num_requests} requests.')
-        print()  # New line for better readability
-
-# Use the function
-test_dns_balancing(['fiat-emeaprod-1b-halo'], num_requests=20)
+Best regards,

@@ -1,11 +1,40 @@
-Dear [Recipient's Name],
+http {
+    log_format custom '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for" '
+                      '$hostname';
 
-I hope this message finds you well. I am writing to request urgent business approval to implement a Change Request (CR) necessary for the initial configuration and installation of two new servers. These servers are intended to be added to our existing production environment.
+    access_log /var/log/nginx/access.log custom;
 
-Currently, these two servers are isolated from the production environment, and we need to approve the CR to continuously work on their installation and configuration. The primary reason for this urgency is the ongoing issue in our production environment, specifically with the ParamService application, which is struggling to handle the current load of incoming requests. By adding these two new servers, we aim to distribute the load evenly across all servers, thus preventing service outages or downtimes.
+    upstream backend1 {
+        server backend1.example.com:9070;
+        server backend1.example.com:9071;
+    }
 
-Given the critical nature of this issue, it is imperative that we deploy these new servers as soon as possible. Therefore, I kindly request your prompt approval of this CR. Additionally, I would appreciate it if you could also grant pre-approval for any subsequent CRs related to this issue, in case we are unable to complete all necessary tasks within the scope of this initial CR.
+    upstream backend2 {
+        server backend2.example.com:9070;
+        server backend2.example.com:9071;
+    }
 
-Thank you for your immediate attention to this matter.
+    server {
+        listen 80;
+        server_name _;
 
-Best regards,
+        location / {
+            set $backend "";
+
+            if ($server_addr = "192.168.1.1") {
+                set $backend "backend1";
+            }
+            if ($server_addr = "192.168.2.1") {
+                set $backend "backend2";
+            }
+
+            proxy_pass http://$backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+}

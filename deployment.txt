@@ -1,40 +1,68 @@
-http {
-    log_format custom '$remote_addr - $remote_user [$time_local] "$request" '
-                      '$status $body_bytes_sent "$http_referer" '
-                      '"$http_user_agent" "$http_x_forwarded_for" '
-                      '$hostname';
-
-    access_log /var/log/nginx/access.log custom;
-
-    upstream backend1 {
-        server backend1.example.com:9070;
-        server backend1.example.com:9071;
-    }
-
-    upstream backend2 {
-        server backend2.example.com:9070;
-        server backend2.example.com:9071;
-    }
-
-    server {
-        listen 80;
-        server_name _;
-
-        location / {
-            set $backend "";
-
-            if ($server_addr = "192.168.1.1") {
-                set $backend "backend1";
-            }
-            if ($server_addr = "192.168.2.1") {
-                set $backend "backend2";
-            }
-
-            proxy_pass http://$backend;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-        }
-    }
-}
+SELECT 
+    t.TRADEID,
+    t.EQTQUOTEID,
+    t.ISIN,
+    t.NIXID,
+    eq.PUBLICOFFER,
+    t.TRADEDATE,
+    t.STRIKEDATE,
+    t.STARTDATE AS ISSUEDATE,
+    t.STATUS,
+    t.PRODUCT,
+    t.NOTIONAL,
+    t.BROKERPARTYID,
+    t.SALESPERSON,
+    t.TENOR,
+    t.SETTLEMENT,
+    t.MATURITYDATE,
+    t.SETTLEMENTDATE,
+    TRUNC(t.SUBMISSIONDATE) AS SUBMISSIONDATE
+FROM 
+    ewarrants_owner.tbl_custom_eq_price_request eq
+JOIN 
+    ewarrants_owner.tbl_custom_trade t ON eq.pricerequestid = t.pricerequestid
+WHERE 
+    TRUNC(t.submissiondate) = TRUNC(SYSDATE - 1)
+AND 
+    t.counterpartyid NOT IN (41978402)
+AND 
+    (
+        SELECT 
+            CAST((t.denomination / x.rate) AS INT) AS DENOMFX,
+            CAST((t.MINTRADABLEAMOUNT / x.rate) AS INT) AS MINTRADABLEAMOUNTFX,
+            t.STATUS AS tradestatus,
+            t.COUNTERPARTYID AS tradecounterparty,
+            t.CLIENTID AS tradeclientid
+        FROM 
+            ewarrants_owner.tbl_custom_trade t
+        JOIN 
+            ewarrants_owner.tbl_instrument i ON t.instrumentid = i.instrumentid
+        JOIN 
+            ewarrants_owner.tbl_fx_rate_history x ON x.fxdate = TRUNC(t.strikedate)
+        JOIN 
+            ewarrants_owner.tbl_custom_eq_price_request eq ON eq.pricerequestid = t.pricerequestid
+        WHERE 
+            TRUNC(t.strikedate) >= TRUNC(SYSDATE - 1)
+        AND 
+            t.counterpartyid NOT IN (41978402)
+        AND 
+            t.userisexternal = 0
+        AND 
+            t.pricerequestid = eq.pricerequestid(+)
+        AND 
+            t.instrumentid = i.instrumentid
+        AND 
+            x.fxdate = TRUNC(t.strikedate)
+        AND 
+            x.CCY1 = t.CCY1
+        AND 
+            x.CCY2 = DECODE(t.currency, NULL, 'EUR', t.currency)
+        AND 
+            (denomfx < 100000 AND (MINTRADABLEAMOUNTFX < 100000 OR MINTRADABLEAMOUNTFX IS NULL))
+        AND 
+            eqtquoteid NOT LIKE ('JP%')
+        AND 
+            tradingmedium NOT IN ('FSX')
+        AND 
+            termssheettype IN ('GSSP_Enhanced', 'GSSP_SwissPP')
+    )

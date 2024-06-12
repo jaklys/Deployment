@@ -21,48 +21,32 @@ FROM
     ewarrants_owner.tbl_custom_eq_price_request eq
 JOIN 
     ewarrants_owner.tbl_custom_trade t ON eq.pricerequestid = t.pricerequestid
+JOIN 
+    ewarrants_owner.tbl_instrument i ON t.instrumentid = i.instrumentid
+JOIN 
+    ewarrants_owner.tbl_fx_rate_history x ON x.fxdate = TRUNC(t.strikedate)
 WHERE 
     TRUNC(t.submissiondate) = TRUNC(SYSDATE - 1)
 AND 
     t.counterpartyid NOT IN (41978402)
 AND 
     (
-        SELECT 
-            CAST((t.denomination / x.rate) AS INT) AS DENOMFX,
-            CAST((t.MINTRADABLEAMOUNT / x.rate) AS INT) AS MINTRADABLEAMOUNTFX,
-            t.STATUS AS tradestatus,
-            t.COUNTERPARTYID AS tradecounterparty,
-            t.CLIENTID AS tradeclientid
-        FROM 
-            ewarrants_owner.tbl_custom_trade t
-        JOIN 
-            ewarrants_owner.tbl_instrument i ON t.instrumentid = i.instrumentid
-        JOIN 
-            ewarrants_owner.tbl_fx_rate_history x ON x.fxdate = TRUNC(t.strikedate)
-        JOIN 
-            ewarrants_owner.tbl_custom_eq_price_request eq ON eq.pricerequestid = t.pricerequestid
-        WHERE 
-            TRUNC(t.strikedate) >= TRUNC(SYSDATE - 1)
-        AND 
-            t.counterpartyid NOT IN (41978402)
-        AND 
-            t.userisexternal = 0
-        AND 
-            t.pricerequestid = eq.pricerequestid(+)
-        AND 
-            t.instrumentid = i.instrumentid
-        AND 
-            x.fxdate = TRUNC(t.strikedate)
-        AND 
-            x.CCY1 = t.CCY1
-        AND 
-            x.CCY2 = DECODE(t.currency, NULL, 'EUR', t.currency)
-        AND 
-            (denomfx < 100000 AND (MINTRADABLEAMOUNTFX < 100000 OR MINTRADABLEAMOUNTFX IS NULL))
-        AND 
-            eqtquoteid NOT LIKE ('JP%')
-        AND 
-            tradingmedium NOT IN ('FSX')
-        AND 
-            termssheettype IN ('GSSP_Enhanced', 'GSSP_SwissPP')
+        CAST((t.denomination / x.rate) AS INT) < 100000
+        AND (CAST((t.MINTRADABLEAMOUNT / x.rate) AS INT) < 100000 OR t.MINTRADABLEAMOUNTFX IS NULL)
     )
+AND 
+    t.STATUS = eq.STATUS
+AND 
+    t.COUNTERPARTYID = eq.COUNTERPARTYID
+AND 
+    x.CCY1 = t.CCY1
+AND 
+    x.CCY2 = DECODE(t.currency, NULL, 'EUR', t.currency)
+AND 
+    t.userisexternal = 0
+AND 
+    t.tradingmedium NOT IN ('FSX')
+AND 
+    t.termssheettype IN ('GSSP_Enhanced', 'GSSP_SwissPP')
+AND 
+    t.eqtquoteid NOT LIKE 'JP%'

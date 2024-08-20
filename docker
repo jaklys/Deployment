@@ -1,16 +1,43 @@
-# Aktualizace systému a instalace Zulu OpenJDK 11
-RUN yum update -y && \
-    yum install -y zulu-openjdk11 && \
-    yum clean all
+import time
 
-# Nalezení cesty k Zulu OpenJDK 11 a nastavení jako výchozí
-RUN JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) && \
-    update-alternatives --install /usr/bin/java java $JAVA_HOME/bin/java 20000 && \
-    update-alternatives --install /usr/bin/javac javac $JAVA_HOME/bin/javac 20000
+# Funkce, kterou testujeme
+def get_offset_for_day(day_of_week):
+    return "3" if day_of_week >= 5 else "1"
 
-# Nastavení Zulu OpenJDK 11 jako výchozí verze Javy
-RUN update-alternatives --set java /usr/lib/jvm/zulu-11/bin/java && \
-    update-alternatives --set javac /usr/lib/jvm/zulu-11/bin/javac
+# Testovací funkce
+def test_get_offset():
+    test_results = []
+    
+    # Testovací data: číslo dne v týdnu (0 = neděle, 1 = pondělí, ... 6 = sobota)
+    test_days = {
+        0: "Sunday",
+        1: "Monday",
+        2: "Tuesday",
+        3: "Wednesday",
+        4: "Thursday",
+        5: "Friday",
+        6: "Saturday"
+    }
+    
+    expected_results = {
+        0: "3",  # Sunday
+        1: "1",  # Monday
+        2: "1",  # Tuesday
+        3: "1",  # Wednesday
+        4: "1",  # Thursday
+        5: "3",  # Friday
+        6: "3",  # Saturday
+    }
+    
+    # Test each day
+    for day, name in test_days.items():
+        result = get_offset_for_day(day)
+        expected = expected_results[day]
+        test_results.append((name, result, expected, result == expected))
+    
+    # Output test results
+    for day, result, expected, passed in test_results:
+        print(f"Day: {day}, Offset: {result}, Expected: {expected}, Test Passed: {passed}")
 
-# Ověření aktuálně používané verze Javy
-RUN java -version && javac -version
+# Spustit test
+test_get_offset()

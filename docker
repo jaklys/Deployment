@@ -30,12 +30,13 @@ add_profile_to_jil_files(directory_path, profile_value)
 
 
 
-# tests/test_jil_files.py
 import os
+from pathlib import Path
 import pytest
 
 def test_all_jil_files_have_profile():
-    directory_path = r'Z:\Your\Path\Here'
+    # Relativní cesta k adresáři s .jil soubory přímo z kořenového adresáře repozitáře
+    directory_path = Path('path/to/your/jil/files')  # Zadejte správnou relativní cestu
     missing_profile_files = []
     
     # Projdi všechny soubory v dané cestě

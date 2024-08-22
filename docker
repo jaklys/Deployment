@@ -28,15 +28,17 @@ profile_value = r'D:\DATA\Groups\MktEnv\NodeRunner\config\AutoSys-EMEA-UAT1-A.co
 add_profile_to_jil_files(directory_path, profile_value)
 
 
-
-
 import os
 from pathlib import Path
 import pytest
 
-def test_all_jil_files_have_profile():
-    # Relativní cesta k adresáři s .jil soubory přímo z kořenového adresáře repozitáře
-    directory_path = Path('path/to/your/jil/files')  # Zadejte správnou relativní cestu
+# Parametrizace testu, cesta je parametr
+@pytest.mark.parametrize("jil_directory", [
+    '../JILs/P13',  # Přidejte další cesty dle potřeby
+])
+def test_all_jil_files_have_profile(jil_directory):
+    # Získání absolutní cesty k adresáři s .jil soubory
+    directory_path = Path(jil_directory).resolve()
     missing_profile_files = []
     
     # Projdi všechny soubory v dané cestě
@@ -52,5 +54,11 @@ def test_all_jil_files_have_profile():
                 if "profile:" not in content:
                     missing_profile_files.append(file_path)
 
+    # Pokud jsou soubory, kde chybí 'profile:', vypiš je
+    if missing_profile_files:
+        print("Soubory, kde chybí parametr 'profile:':")
+        for file in missing_profile_files:
+            print(file)
+    
     # Pokud je seznam chybějících profilů neprázdný, test selže
     assert len(missing_profile_files) == 0, f"These files are missing the profile parameter: {missing_profile_files}"

@@ -62,3 +62,16 @@ def test_all_jil_files_have_profile(jil_directory):
     
     # Pokud je seznam chybějících profilů neprázdný, test selže
     assert len(missing_profile_files) == 0, f"These files are missing the profile parameter: {missing_profile_files}"
+
+
+    Dear Team,
+
+I would like to inform you that this weekend, we will be shutting down the remaining services running on two old servers with the DNS names fiat-ldnprod and fiat-ldndr (hostnames to be provided). These services have already been migrated to the new servers fiat-emeaprod-a1 and fiat-emeaprod-a2.
+
+Below is a list of services that will be shut down this weekend and will no longer be available as of Monday. This is a step we are taking as part of the Windows 2012 remediation process. All configurations have been updated, and these services are no longer in use.
+
+If you suspect that any of your services are still pointing to these old servers, please let us know. Additionally, if you experience any service outages on Monday, August 26th, or Tuesday, please inform us immediately.
+
+Please note that the servers themselves will not be shut down yet, and if we identify any issues, we can promptly bring the services back online.
+
+Thank you for your attention to this matter.

@@ -1,77 +1,15 @@
-import os
+Dear Trading Team,
 
-def add_profile_to_jil_files(directory_path, profile_value):
-    # Projdi všechny soubory v dané cestě
-    for root, dirs, files in os.walk(directory_path):
-        for file in files:
-            if file.endswith(".jil"):
-                file_path = os.path.join(root, file)
-                
-                with open(file_path, 'r') as f:
-                    content = f.readlines()
-                
-                # Zkontroluj, zda soubor již obsahuje parametr 'profile:'
-                profile_exists = any("profile:" in line for line in content)
-                
-                # Pokud 'profile:' není v souboru, přidej ho
-                if not profile_exists:
-                    with open(file_path, 'a') as f:
-                        f.write(f"\nprofile: {profile_value}\n")
-                        print(f"Added profile to {file_path}")
+I wanted to update you on the recent migration of our applications from the old servers (fiat-ldnprod and fiat-ldndr) to the new servers (fiat-emeaprod-a1 and fiat-emeaprod-a2). The migration has been successfully completed, and all applications on the old servers have been shut down, with the sole exception of ParamService.
 
-# Cesta k adresáři se soubory .jil
-directory_path = r'Z:\Your\Path\Here'
-# Hodnota profilu, kterou chcete přidat
-profile_value = r'D:\DATA\Groups\MktEnv\NodeRunner\config\AutoSys-EMEA-UAT1-A.config'
+If you have any custom scripts that reference the old servers, it is essential that you update them to point to the new server locations immediately. This also applies to the .xls file located at [insert file path]. The file has been updated, so if you are working with a local copy, please make sure to download the latest version from the shared drive, or adjust your parameters accordingly.
 
-# Spuštění funkce
-add_profile_to_jil_files(directory_path, profile_value)
+Please note that ParamService on the old servers will be shut down this weekend. If you do not download the modified version from the shared drive and update your scripts, they will stop functioning next week.
 
+Your prompt attention to these changes is crucial to avoid any disruptions.
 
-import os
-from pathlib import Path
-import pytest
+If you need assistance or have any questions, please don’t hesitate to reach out.
 
-# Parametrizace testu, cesta je parametr
-@pytest.mark.parametrize("jil_directory", [
-    '../JILs/P13',  # Přidejte další cesty dle potřeby
-])
-def test_all_jil_files_have_profile(jil_directory):
-    # Získání absolutní cesty k adresáři s .jil soubory
-    directory_path = Path(jil_directory).resolve()
-    missing_profile_files = []
-    
-    # Projdi všechny soubory v dané cestě
-    for root, dirs, files in os.walk(directory_path):
-        for file in files:
-            if file.endswith(".jil"):
-                file_path = os.path.join(root, file)
-                
-                with open(file_path, 'r') as f:
-                    content = f.read()
-                
-                # Zkontroluj, zda soubor obsahuje parametr 'profile:'
-                if "profile:" not in content:
-                    missing_profile_files.append(file_path)
+Thank you for your cooperation.
 
-    # Pokud jsou soubory, kde chybí 'profile:', vypiš je
-    if missing_profile_files:
-        print("Soubory, kde chybí parametr 'profile:':")
-        for file in missing_profile_files:
-            print(file)
-    
-    # Pokud je seznam chybějících profilů neprázdný, test selže
-    assert len(missing_profile_files) == 0, f"These files are missing the profile parameter: {missing_profile_files}"
-
-
-    Dear Team,
-
-I would like to inform you that this weekend, we will be shutting down the remaining services running on two old servers with the DNS names fiat-ldnprod and fiat-ldndr (hostnames to be provided). These services have already been migrated to the new servers fiat-emeaprod-a1 and fiat-emeaprod-a2.
-
-Below is a list of services that will be shut down this weekend and will no longer be available as of Monday. This is a step we are taking as part of the Windows 2012 remediation process. All configurations have been updated, and these services are no longer in use.
-
-If you suspect that any of your services are still pointing to these old servers, please let us know. Additionally, if you experience any service outages on Monday, August 26th, or Tuesday, please inform us immediately.
-
-Please note that the servers themselves will not be shut down yet, and if we identify any issues, we can promptly bring the services back online.
-
-Thank you for your attention to this matter.
+Best regards,

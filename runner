@@ -1,0 +1,679 @@
+<%o Language-VBScript %>
+<I -- #INCLUDE FILE="inc/xmlutil.asp" -→>
+<%
+Function IsChecked(strFieldName)
+Dim blnChecked
+Dim action
+action - Request. Form("DoBtn")
+If action = "" Then
+action = "Status"
+End If
+If Len(Request. Form(strFieldName)) > 0 And action - "Status" Then binChecked - True
+Else
+End If
+blnChecked = False
+IsChecked - binChecked
+End Function
+Function FormatDate(dateStr, tzOffset)
+FormatDate - dateStr
+Dim sep
+Dim dateVal
+Dim timeVal
+Dim timestr
+Dim retStr
+petstr=ww
+sep = InStr (datestr, "T")
+If sep > 0 Then
+dateVal - CDate(Left(dateStr, sep - 1))
+If dateVal • Date() Then
+retstr - Str(Day (dateVal)) & *-" & MonthName(Month (dateVal), True) & "_* & Year(dateVal) & - • End If
+If Right(datestr, 1) - "7" Then
+timeStr - Mid(dateStr, sep + 1, Len(dateStr) - sep - 1)
+Else
+timeStr - Right(dateStr, Len(dateStr) - sep)
+End If
+timeVal - CDate(timeStr) + TimeSerial(0, tzOffset, 0)
+retstr - retStr & FormatDateTime(timeVal, 3)
+End If
+FormatDate - retStr
+End Function
+Function KeyStr(namestr, verstr)
+KeyStr - namestr & "|" & verStr
+End Function
+Sub NameVerFromkey(key, nameStr, verStr)
+Dim sep
+sep - InStr(key, "|*)
+nameStr - Left(key, sep - 1)
+verStr = Right(key, Len(key) - sep)
+End Sub
+Function GetNodeRunner (hostName
+If hostName="" Then hostName - Request.ServerVariables ("SERVER _NAME")
+
+Function GetNodeRunner (hostName)
+If hostName="* Then hostName - Request.ServerVariables("SERVER _NAME")
+Set GetNodeRunner - CreateObject ("NodeRunner. NodeRunnerControl", hostName)
+End Function
+
+Sub DoCommand (nodeRunner, action, nameStr, verStr)
+Select Case action
+
+
+Case "Shutdown"
+
+On Error Resume Next
+
+nodeRunner-Shutdown false
+
+On Error GoTo 0
+
+Case "StopAll"
+
+nodeRunner-StopAllChildren
+Case "Stop"
+
+
+nodeRunner.Stopchild nameStr, verStr
+Case "Start"
+
+
+nodeRunner StartChild nameStr, verStr
+
+Case "Bounce"
+
+nodeRunner .StopChild namestr, verstr
+
+nodeRunner_StartChild namestr, verstr
+
+Case "Disable"
+
+nodeRunner.DisableChildRestart nameStr, verStr
+
+Case "Enable"
+
+nodeRunner.EnableChildRestart nameStr, verStr
+
+Case "Reload All"
+
+nodeRunner-ReloadAllConfigs
+
+Case "Reload"
+
+nodeRunner-ReloadProcessConfig nameStr, verStr
+End Select
+
+End Sub
+
+I
+Function GetDoc(cnn, statusTime)
+Dim xmIDoc
+Set xmiDoc - getxMLDoc(cnn.Status)
+If xmIDoc.parseError <> 0 Then
+Response Write reportParseError (objML-parseError)
+Exit Function
+End If
+status Time - Now
+Set GetDoc - xmlDoc
+End Function
+Function GetHeader (hostName, objXML, statusTime, startTime)
+Dim temp
+Dim topNode
+Dim attr
+Set topNode - objXML.selectSingleNode("ProcessList")
+Set attr - topNode,Attributes startTime - attr-getNamedItem("StartTime"). Text
+temp - "‹h2 class='subtitle text-center'›" & hostName & "‹/h2> <h3 class='text-center'› Last Update: " & FormatDateTime(statusTime, 3) & "</h3>"
+GetHeader = temp
+End Function
+Sub
+GetTable(objML, tablestr, indx, tzOffset, hostName)
+Dim node
+Dim attr
+Dim curNode
+Dim nameStr
+Dim verStr
+Dim checkStr
+Dim checkVal
+Dim HiddenName
+Dim HiddenVal
+Dim butStr
+Set topNode - objML. selectSingleNode("ProcessList")
+Set node = topNode.firstChild
+temp = **
+indx = 0
+While Not node Is Nothing
+Set attr = node.Attributes
+Set curNode - attr-getNamedItem ("Name")
+namestr = curNode. Text
+Set curNode - attr -getNamedItem("Version")
+verStr = curNode. Text
+indx = indx + 1
+checkStr = "checkbox_
+" & CStr(indx)
+HiddenName - "hidden_checkbox." & CStrindx)
+HiddenVal = "*"
+If IsChecked(checkStr) Then checkVal - "CHECKED"
+Else
+checkVal - •
+End If
+temp - temp & "<tr><td><INPUT TYPE=""checkbox"•
+temp = temp
+&
+"ctdy" & namestr & "</tdy"
+NAME="* & checkStr & " VALUE="** & KeyStr (nameStr, verstr) &
+temp = temp & "<td>" & verStr & "‹/td›"
+Set curNode - attr-getNamedItem ("Status")
+temp - temp & "<td>" & curNode.Text & "‹/td»"
+Set curNode - attr-getNamedItem ("PID")
+If curNode Is Nothing Then
+temp - temp & "<td>&nbsp:</td›"
+Else
+temp - temp & "<td>" & curNode. Text & *‹/td›"
+End If
+Set curNode - attr -getNamedItem("StartTime")
+If curNode Is Nothing Then
+temp - temp & "‹td›&nbsp;</td>"
+Else
+End If
+temp - temp & "‹td align=""right""›* & FormatDate(CurNode.Text, tzOffset) & "</td>"
+Set curNode - attr -getNamedItem("NextEvent")
+If curNode Is Nothing Then
+temp - temp & "<td›None</td›"
+Else
+temp - temp & "<td>" & curNode. Text & "</td›"
+End If
+Set curNode - attr -getNamedItem("NextEventTime")
+If curNode Is Nothing Then
+temp - temp & "‹td>&nbsp;</td›"
+Else
+End Tf
+temp - temp & "<td align-""night"*," & FormatDate(curNode. Text, tzoffset) & "‹/td›*
+End If
+Set curNode - attr-getNamedItem ("AutoStart") temp - temp & "<td align=""center"*,"
+If curNode Is Nothing Then temp - temp & "Anbsp;"
+ElseIf curNode. Text - "true" Then temp - temp & "anbsp;"
+Else
+temp - temp & "YES"
+HiddenVal - "CHECKED"
+End If
+Dim HiddenNameStr
+temp - temp & "<input type-""HIDDEN"' NAME="hidden_" & namestr & "_" & verstr & ***' VALUE="*™ & HiddenVal & "**/›" temp - temp & "</td>"
+temp - temp & "<td><a href=""Config-asp?host=" & hostName & "Aname-" & nameStr & "aversion=" & verStr & "**/›config</a></td›" temp = temp & "</tr›"
+Set node - node-nextSibling
+Wend
+tableStr - temp
+End Sub
+%>
+<%
+Dim hostName
+Dim targetStr
+Dim AmpersandIndex
+Dim TimeoutString
+• Need to check if the URL contains parameters
+• Timeout value
+• Figure out the hostname of the machine running noderunner
+• Also determine if the user requested a different refresh timer
+hostName - Request.QueryString
+Ampersand Index - InStr (hostname, "*") if AmpersandIndex > 0 Then
+hostnane - Left(hostname, AmpersandIndex - 1)
+Dim TempValue
+Dim OtherIndex
+TempValue - Right (Request.QueryString, AmpersandIndex)
+other Index - InStr (TempValue, "-") if OtherIndex › 0 Then
+End If
+TimeoutString - Right(TempValue, Len(TempValue) - OtherIndex)
+else
+TimeoutString - "15000"
+End If
+Remember the request so we can resend it.
+targetStr - Request ServerVariables("SCRIPT_NAME") & **" & Request.QueryString
+Dim nodeRunner
+Set nodeRunner - GetNodeRunner(hostName)
+
+dim tzOffset
+tzOffset = CLng(Request.Form("TZ")) * -1
+
+Dim action
+
+action - Request. Form("Doßtn")
+
+If action - "Shutdown"
+Then
+
+DoCommand nodeRunner, action, **
+
+Set nodeRunner = Nothing
+
+Else If action - "Reload All" Then
+
+DoCommand nodeRunner, action, "*, ""
+
+End If
+End If
+
+If Len(action) › 0 And action »›
+"Status" Then
+Dim row
+Dim checkstr
+Dim valStr
+Dim nameStr
+Dim verStr
+Dim didall didAll - true
+For row - 1 to Request. Form ("checkbox _count") checkStr - "checkbox_" & CStr(row) valStr - Request. Form(checkStr)
+If Len(valstr) › 0 Then
+NameVerFronkey valstr, nameStr, verStr DoCommand nodeRunner, action, nameStr, verstr
+Else
+didAll - false
+End If
+Next
+If didAll - true And action - "Stop" Then DoCommand nodeRunner, "StopAll", "**
+End If
+End If
+11 n
+Get the current status
+Dim objXml
+Dim tableStr
+Dim hdrStr
+Dim rowcount
+Dim statusTime
+Dim startTime
+If action - "Shutdown" Then
+hdrStr - "*
+tableStr - statusTime - ** startTime - "*
+Else
+Set objml = GetDoc(nodeRunner, statusTime)
+GetTable objML, tableStr, rowCount, tzOffset, hostName hdrStr - GetHeader (hostName, objXML, statusTime, startTime)
+End If
+Set nodeRunner = Nothing
+%>
+<html>
+<head>
+‹div class="card">
+<title>Node Runner Console</title>
+< link rel-"stylesheet" type="text/css" href-"bootstrap.css">
+«link rel="stylesheet" href-"https://cdn.jsdelivr.net/npm/bulma@o.9.4/css/bulma.min.css"›
+≤/div>
+</head> < body>
+‹div class="container is-fluid">
+‹div class="dropdown" id-"emeaDropdown">
+‹div class="dropdown-trigger">
+‹button class="button is-primary" aria-haspopup-"true" aria-controls-"emeaDropdown-menu">
+< span>Fiat EMEA</span>
+‹span class="icon is-small">
+‹i class="fas fa-angle-down" aria-hidden="true"*/i›
+</span>
+</button>
+</div>
+‹div class="dropdown-menu" id-"emeaMenu" role-"menu">
+‹div class="dropdown-content"›
+‹| -- Cotent from json -->
+</div›
+</div>
+</div>
+‹div class="dropdown" id-"apacDropdown">
+‹div class="dropdown-trigger">
+‹button class="button is-primary" aria-haspopup-"true" aria-controls="apacDropdown-menu">
+‹span>Fiat APAC</span>
+‹span class-"icon is-small">
+«i class-"fas fa-angle-down"*/i›
+‹/span>
+</button>
+</div›
+‹div class-"dropdown-menu" id-"apacMenu" role-"menu">
+‹div class="dropdown-content">
+<|-- Cotent from json -->
+</div>
+</div>
+</div>
+‹div class="dropdown" id-"noteOneDropdown*>
+« div class="dropdown-trigger"›
+‹button class-"button is-primary" aria-haspopup="true" aria-controls-"noteOneDropdown-menu">
+‹span>NoteOne‹/span>
+‹span class-"icon is-small">
+←
+class="fas fa-angle-down"></i>
+‹/span>
+</button›
+(/div>
+‹div class="dropdown-menu* id-"noteOneMenu" role-"menu">
+‹div class="dropdown-content">
+‹ -- Cotent from json -->
+≤/div>
+</ div>
+</div>
+</div>
+‹div class="container is-fluid">
+‹div class="card">
+‹div class="tile is-parent">
+‹article class="tile is-child notification is-dark">
+‹p class="title">
+chi class-'title text-center' id-"dns">DNS to load</h1> chi class='subtitle text-center'>
+«span id="env"›Default ENV</span>
+‹span › || </span>
+‹span ><% = hostName
+％く/span＞
+‹span › || </span>
+‹span ><% - statusTime %></span>
+</h1>
+s/p>
+‹/article>
+</div>
+</div>
+‹div class-"card">
+‹div class="tile p-2 is-centered">
+‹input class-"input is-primary
+‹/div>
+is-rounded" type-"text" id-"myInput" onkeyup-"myFunction()" placeholder-"Search..." title-"Type in a name">
+</div>
+‹div class="card">
+«FORM class="m-0" ACTION-"%- targetStr %>" METHOD-"post" id-"StatusForm" name-"StatusForm">
+<INPUT TYPE="hidden" NAME="TZ" VALUE-*0" /›
+‹div class-"card">
+‹div class="columns m-e p-0">
+< div class="column*><INPUT
+class-"button is-dark is-fullwidth" TYPE="submit" NAME="DoBtn" VALUE-"Status"/>‹/div>
+‹div class="column"><INPUT
+class-"button is-dark is-fullwidth" TYPE="submit" NAME-"DoBtn" VALUE="Bounce"/></div>
+«div class-"column"><INPUT class-"button is-dark is-fullwidth" TYPE="submit" NAME-"DoBtn" VALUE-"Start" onclick-"return VerifyDisabled()*/*/div›
+‹div class="column"><INPUT class="button is-dark is-fullwidth" TYPE="submit* NAME-"DoBtn" VALUE="Stop"/›/div>
+‹ div class="column"><INPUT
+class="button is-dark is-fullwidth" TYPE="submit" NAME-"DoBtn" VALUE-"Disable"/>/div›
+‹div class-"column"><INPUT class="button is-dark is-fullwidth" TYPE="submit" NAME="DoBtn" VALUE-"Enable"/></div> «div class-"column"><INPUT class-"button is-dark is-fullwidth" TYPE="submit" NAME-"DoBtn" VALUE-"Shutdown"/></div> ‹div class-"column"><INPUT class="button is-dark is-fullwidth" TYPE="submit" NAME-"DoBtn* VALUE-"Reload All" /›</dv> «div class-"column"><INPUT class-"button is-dark is-fullwidth" TYPE="submit" NAME="DoBtn" VALUE-"Reload" /x/div>
+‹div class-"column"›INPUT class-"button is-primary is-fullwidth" TYPE="submit" id-"toggleRefresh" name-"pause value-"Pause Auto-Refresh*>‹/div>
+</div>
+</div>
+‹/div›
+‹div class-"card">
+‹TABLE id-"myTable" class-"table table-sm table-striped table-hover" BORDER-"0" CELLPADDING-*3" CELLSPACING-"®"*
+<thead>
+< TR>
+</TR>
+‹/thead>
+
+</TR>
+‹/thead>
+
+<TH><input type-"checkbox" id-"selectA11*>≤/TH›
+
+< TH>Name</TH>
+
+<TH> Version</TH>
+
+‹TH>Status</TH>
+
+<TH>PID</TH>
+
+‹TH>Start Time</TH>
+
+<TH> Next Event</TH>
+
+<TH>Event Time</TH>
+
+<TH>Disabled≤/TH>
+
+< TH>NR XML</TH>
+
+% = tablestr %›
+</TABLE></div›
+‹div class-"card">
+‹INPUT TYPE-"hidden" NAME-"checkbox_count" VALUE-"% = CStr(rowCount) %›*/›
+‹div class-"card">
+</ div> </div>
+</ FORM>
+‹/div>
+</div>
+</div>
+‹footer
+class="footer">
+‹div class="content has-text-centered">
+‹ Strong>
+Started at </strong>
+s/р>
+‹р>
+s/р>
+‹/div>
+</footer>
+<% - FormatDate(startTime, tzOffset) %›
+Powered by Fiat Devops
+‹script language-"JavaScript">
+<. --
+var d = new Date
+if (d-getTimezoneOffset) (
+var Minutes - d-getTimezoneOffset()
+window. document-StatusForm. TZ.value - iMinutes
+‹div class=" columns n-0 p-o">
+
+‹div class="column"><INPUT
+class="button is-dark is-fullwidth" TYPE="submit"
+
+‹div class="column"><INPUT
+class-"button is-dark is-fullwidth" TYPE-"submit"
+NAME-"DoBtn" VALUE="Status" /x/div>
+NAME-"DoBtn"
+‹ div
+class="column"><INPUT
+class-"button is-dark is-fullwidth" TYPE="submit"
+VALUE-"Bounce"/></div>
+NAME-"DoBtn"
+‹div
+class="column"><INPUT
+class="button is-dark is-fullwidth" TYPE="submit"
+VALUE="Start" onclick-"return VerifyDisabled()*/></div>
+NAME="DoBtn"
+VALUE="Stop"/></div›
+‹div
+class="column"*<INPUT
+class="button is-dark is-fullwidth" TYPE="submit"
+NAME="DoBtn"
+VALUE-"Disable"/></div›
+KdIV
+class="column"><INPUT
+class-"button is-dark is-fullwidth" TYPE="submit"
+NAME="DoBtn"
+‹div class="column"><INPUT
+class-"button is-dark is-fullwidth" TYPE="submit"
+NAME-"DoBtn"
+VALUE-"Enable"/></div>
+‹div class="column**<INPUT
+class="button is-dark is-fullwidth" TYPE="submit"
+VALUE-"Shutdown" /></div>
+‹div class-"column"><INPUT
+class="button is-dark is-fullwidth" TYPE-"submit" NAME="DoBtn" VALUE="Reload" /s‹/div>
+NAME-"DoBtn" VALUE-"Reload All" /></div›
+/var timeout - % - TimeoutString %›
+I/var urlString - new String(window. document. url);
+//if (urlString-indexof('refresh=') › -1)
+// var index - urlString-indexof('refresh=');
+index += 8;
+/var end_index - urlString.indexof(';', index);
+I var timeoutstring - new String(urlString-substring(index));
+// timeout - parseInt(timeoutstring, 10);
+1/}
+function loadHostMap() 1
+fetch('map.json')
+• then (response
+=>
+response. json())
+
+function loadHostMap() {
+fetch ( 'map.json')
+• then (response → response.json ())
+• then (data → 1
+var hostnames - "<% - hostName %›"; hostnames = hostnames split('•')[0];
+var dns - "Not Found";
+var env = "Not Found";
+if (data.hasOwnProperty (hostnames)) {
+dns = data[hostnames] .dns;
+env - data[hostnames] .env;
+document.title = dns + " - "
++ env;
+document-getElementById ("dns") - textContent = dns;
+document -getElementById("env"). textContent - env;
+})
+• catch(error →> console.error('Error while loading map.json:', error));
+document. addEventListener ('DOMContentLoaded', function() {
+fetch("map. json' )
+- then (response →> response-json))
+• then (data =
+Object.entries(data).forEach(([key, value])
+→ t
+let menultem - document-createElement("a'); menultem.href - "http://$(key}:82/Monitor.asp*;
+menuitem. classList.add( 'dropdown-item' );
+menuItem. textContent - value.env;
+if (value.dns.includes (' fiat-emea')) {
+document-querySelector ('#emeaDropdown dropdown-content') .appendChild(menuItem);
+} else if (value.dns.includes ('fiat-apac')) t
+document.querySelector ('#apacDropdown -dropdown-content') -appendChild (menuItem);
+} else if (value.dns.includes('n1' )) {
+document. querySelector('#noteOneDropdown dropdown-content'). appendChild(menuItem);
+document-querySelectorA11(* dropdown-trigger button*).forEach(trigger => f
+trigger.addEventListener ('click', function (event) {
+event.stopPropagation():
+Let dropdown - this-closest(*-dropdown'); dropdown. classList.toggle('is-active');
+1);
+document.addEventListener ('click', function(event) {
+if (levent. target-matches(' •dropdown-trigger button')) {
+document.querySelectorA11(*
+-dropdown*). forEach(function(dropdown) f
+dropdown. classList.remove('is-active');
+3):
+});
+function myFunction) i
+const searchInput = document-getElementById('myInput');
+searchInput.addEventListener ('input', function) {
+searchInput.className - "input is-primary is-rounded* const searchValue - this. value;
+try t
+const regex - new RegExp(searchValue, '1'); // '1' case-insensitive
+const tableRows = document. querySelectorAll('#myTable tr');
+tableRows.forEachrow ->
+｛
+const cellsText - Array. from(row.cells).map(cell → cell. textContent) -join(* ');
+if (regex.test(cellsText)) {
+row.style.display - **;
+else i
+row. style.display = 'none';
+catch(e) 1
+searchinput. className - "input is-danger is-rounded"
+var timeout - localstorage-getItem('timeout') || % - TimeoutString %›;
+var autoRefreshEnabled = localStorage-getItem('autoRefreshEnabled') = 'false' ? false : true;
+var originalTimeout - <% - TimeoutString %;
+window.onload = function () {
+autoRefreshEnabled - localStorage-getItem ('autoRefreshEnabled") - "false' ? false : true; setTimeout ('GetStatus ()', timeout)
+updateRowHighlighting()
+document-getElementById ('toggleRefresh") -addEventListener (click', function() f
+autoReFreshEnabled - lautoRefreshEnabled;
+if (autoRefreshEnabled) {
+this-value = 'Pause Auto-Refresh';
+this.className - "button is-primary is-fullwidth';
+timeout - originalTimeout;
+localStorage-setItem(' autoRefreshEnabled*, autoRefreshEnabled); localStorage setItem( 'timeout', timeout); setTimeout ('GetStatus ()', timeout); location.reload();
+else {
+this.value = 'Resume Auto-Refresh';
+this.className -
+*button is-danger is-light is-fullwidth';
+timeout - "900000"; localStorage.setItem( 'timeout', timeout); localStorage setItem(' autoRefreshEnabled', autoRefreshEnabled); setTimeout ('GetStatus ()', timeout); location.reload();
+1);
+const button - document-getElementById( 'toggleRefresh*);
+if (autoRefreshEnabled) {
+button. value - 'Pause Auto-Refresh':
+
+if (autoRefreshEnabled) {
+button.value = 'Pause Auto-Refresh';
+button.className = 'button is-primary is-fullwidth';
+}
+else {
+button. value - 'Resume Auto-Refresh';
+button.className - 'button is-danger is-light is-fullwidth';
+document.addEventListener ('DONContentLoaded", function () f var selectAllCheckbox - document.getElementById('selectAll');
+var tableRows = document.querySelectorAl]('#nyTable tr');
+if (selectAllCheckbox) {
+selectAllCheckbox.addEventListener( 'change', function() f var isChecked - this.checked;
+tableRows. forEach(function(row) {
+var checkbox - row-querySelector ('input[type="checkbox"] '):
+if (row.style.display !== 'none') {
+if (checkbox) {
+checkbox-checked - isChecked; toggleHighlight (row, isChecked);
+71)3
+document. addEventListener ('DONContentLoaded", function() f
+let isDragging - false; let draggingTimeout;
+Let table = document-getElementById("myTable*);
+table.addeventListener (mousedown', (e) →> {
+let row = e. target.closest ('tr");
+if (row) {
+draggingTimeout - setTimeout (function() t
+isDragging - true;
+toggleCheckboxAndHighlight(row, true);
+}, 500);
+e. preventDefault();
+1);
+table-addEventListener ('mouseover', (e) →> {
+if (isDragging) {
+let row - e. target.closest('tr*);
+if (row) f
+toggleCheckboxAndHighlight(row, true);
+document. addEventListener ("mouseup', () → ( clearTimeout (draggingTimeout);
+if (isDragging)
+isDragging - false;
+function toggleCheckboxAndHighlight (row, ischecked) (
+let checkbox - row. querySelector ('input[type="checkbox"]'); if (checkbox)
+｛
+checkbox.checked - isChecked;
+if (isChecked)
+row.classList. add ('has-background-primary*);
+else {
+row. classList-remove("has-background-primary');
+document. addEventListener ("DOMContentLoaded", loadHostMap); document. addEventListener (DONContentLoaded', function () 1 var tableRows - document.querySelectorAll ('#myTable tr');
+tableRows. forEach(function(row) {
+row.addEventListener ('dblclick', function) {
+toggleCheckboxAndHighlight(row);
+7):
+var checkbox = row.querySelector (' input [type="checkbox"]*);
+if (checkbox) i
+checkbox. addEventListener ('click', function(e) {
+e-stoppropagation@;
+toggleHighlight(row, checkbox.checked);
+7);
+3)$
+function toggleCheckboxAndHighlight (row) {
+var checkbox - row.querySelector (' input [type-"checkbox"]'); if (checkbox)
+checkbox. checked - I checkbox. checked; toggleHighlight (row, checkbox.checked);
+function toggleHighlight (row, isChecked) (
+if (isChecked) {
+row.classList.add(*has-background-primary');
+J else 1
+row. classList. remove ('has-background-primary');
+function updateRowHighlighting() {
+var tableRows - document.querySelectorA11("#nyTable tr*):
+tableRows. forEach(function(row) {
+var checkbox - row-querySelector ('input[type="checkbox"]');
+if (checkbox) {
+if (checkbox.checked) /
+row.classList. add ('has-background-primary');
+else {
+row. classList.remove('has-background-primary');
+function GetStatus(
+window. document .StatusForn.DoBtn.value - "Status"; window. document-StatusForn.submit();
+function VerifyDisabled()
+// Right, now find out which checkbox is ticked
+var maxRows = document.StatusForm.checkbox_count.value
+var Processkey;
+for (c - 1; c <= maxRows; ++c)
+var checkboxName - "document.StatusForm.checkbox_" + c; var checkboxvalue - eval(checkboxName);
+if (checkboxValue.checked)
+var regex - Al/g:
+var tempstr - checkboxValue.value;
+ProcessKey - tempStr. replace(regex, "_*); break;
+// Figure out which process we're referring to
+// Is the process marked as 'disabled'?
+var hidden_name - "hidden_" + Processkey;
+var isDisabled - eval ("document. StatusForm." + hidden name + *
+- value")
+if (isDisabled -= "CHECKED")
+// Now that we know what the process key is, stick
+/I a dialog in the user's face asking him if s/he wants
+// to proceed.
+var proceed - confirm("Process is disabled, start anyway?") return proceed
+I
+else
+return true
+setTimeout ( Getstatus ()', timeout)
+-->
+</script> </body> </html>

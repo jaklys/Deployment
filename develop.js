@@ -22,38 +22,77 @@ function myFunction() {
     });
 }
 
-<!-- Add to head -->
-<link href="https://cdn.jsdelivr.net/npm/bulma-prefers-dark@0.1.0-beta.1/css/bulma-prefers-dark.min.css" rel="stylesheet">
+<!-- Add switch styles -->
+<style>
+.switch-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
 
-<!-- Add button to columns -->
+.switch[type='checkbox'] {
+    height: 0;
+    width: 0;
+    visibility: hidden;
+}
+
+.switch[type='checkbox'] + label {
+    cursor: pointer;
+    width: 3rem;
+    height: 1.5rem;
+    background: #ddd;
+    display: block;
+    border-radius: 1.5rem;
+    position: relative;
+}
+
+.switch[type='checkbox'] + label:after {
+    content: '';
+    position: absolute;
+    top: 0.125rem;
+    left: 0.125rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    background: #fff;
+    border-radius: 1.25rem;
+    transition: 0.3s;
+}
+
+.switch[type='checkbox']:checked + label {
+    background: #363636;
+}
+
+.switch[type='checkbox']:checked + label:after {
+    left: calc(100% - 0.125rem);
+    transform: translateX(-100%);
+}
+</style>
+
+<!-- Replace button with switch -->
 <div class="column">
-    <button class="button is-dark is-fullwidth" id="toggleDarkMode">
+    <div class="switch-wrapper">
+        <input type="checkbox" id="toggleDarkMode" class="switch">
+        <label for="toggleDarkMode"></label>
         <span class="icon">
             <i class="fas fa-moon"></i>
         </span>
-        <span>Dark Mode</span>
-    </button>
+    </div>
 </div>
 
-<!-- Add JavaScript -->
+<!-- Updated JavaScript -->
 <script>
 function initDarkMode() {
-    const darkModeBtn = document.getElementById('toggleDarkMode');
+    const darkModeSwitch = document.getElementById('toggleDarkMode');
     const html = document.documentElement;
     
-    const isDark = localStorage.getItem('darkMode') === 'true';
-    if (isDark) {
+    darkModeSwitch.checked = localStorage.getItem('darkMode') === 'true';
+    if (darkModeSwitch.checked) {
         html.setAttribute('data-theme', 'dark');
-        darkModeBtn.classList.add('is-light');
-        darkModeBtn.classList.remove('is-dark');
     }
 
-    darkModeBtn.addEventListener('click', () => {
-        const isDark = html.getAttribute('data-theme') === 'dark';
-        html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-        localStorage.setItem('darkMode', !isDark);
-        darkModeBtn.classList.toggle('is-light', !isDark);
-        darkModeBtn.classList.toggle('is-dark', isDark);
+    darkModeSwitch.addEventListener('change', () => {
+        html.setAttribute('data-theme', darkModeSwitch.checked ? 'dark' : 'light');
+        localStorage.setItem('darkMode', darkModeSwitch.checked);
     });
 }
 

@@ -21,3 +21,41 @@ function myFunction() {
         }
     });
 }
+
+<!-- Add to head -->
+<link href="https://cdn.jsdelivr.net/npm/bulma-prefers-dark@0.1.0-beta.1/css/bulma-prefers-dark.min.css" rel="stylesheet">
+
+<!-- Add button to columns -->
+<div class="column">
+    <button class="button is-dark is-fullwidth" id="toggleDarkMode">
+        <span class="icon">
+            <i class="fas fa-moon"></i>
+        </span>
+        <span>Dark Mode</span>
+    </button>
+</div>
+
+<!-- Add JavaScript -->
+<script>
+function initDarkMode() {
+    const darkModeBtn = document.getElementById('toggleDarkMode');
+    const html = document.documentElement;
+    
+    const isDark = localStorage.getItem('darkMode') === 'true';
+    if (isDark) {
+        html.setAttribute('data-theme', 'dark');
+        darkModeBtn.classList.add('is-light');
+        darkModeBtn.classList.remove('is-dark');
+    }
+
+    darkModeBtn.addEventListener('click', () => {
+        const isDark = html.getAttribute('data-theme') === 'dark';
+        html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+        localStorage.setItem('darkMode', !isDark);
+        darkModeBtn.classList.toggle('is-light', !isDark);
+        darkModeBtn.classList.toggle('is-dark', isDark);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', initDarkMode);
+</script>

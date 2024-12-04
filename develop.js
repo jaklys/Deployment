@@ -22,6 +22,40 @@ function myFunction() {
     });
 }
 
+[data-theme="dark"] {
+    background-color: #0a0a0a;
+    color: #fff;
+}
+
+[data-theme="dark"] .card {
+    background-color: #1a1a1a;
+    color: #fff;
+}
+
+[data-theme="dark"] .table {
+    background-color: #1a1a1a;
+    color: #fff;
+}
+
+[data-theme="dark"] .table tr:hover {
+    background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] .notification.is-dark {
+    background-color: #1a1a1a;
+}
+
+[data-theme="dark"] .footer {
+    background-color: #1a1a1a;
+    color: #fff;
+}
+
+[data-theme="dark"] .input {
+    background-color: #1a1a1a;
+    color: #fff;
+    border-color: #363636;
+}
+
 <!-- Add switch styles -->
 <style>
 .switch-wrapper {

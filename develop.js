@@ -1,134 +1,103 @@
-function myFunction() {
-    const searchInput = document.getElementById('myInput');
-    searchInput.addEventListener('input', function() {
-        searchInput.className = "input is-primary is-rounded";
-        const searchValue = this.value;
-        try {
-            const regex = new RegExp(searchValue, 'i');
-            const table = document.getElementById('myTable');
-            const headerRow = table.getElementsByTagName('thead')[0];
-            const tableBody = table.getElementsByTagName('tbody')[0];
-            
-            if (tableBody) {
-                const rows = tableBody.getElementsByTagName('tr');
-                Array.from(rows).forEach(row => {
-                    const cellsText = Array.from(row.cells).map(cell => cell.textContent).join(' ');
-                    row.style.display = regex.test(cellsText) ? '' : 'none';
-                });
-            }
-        } catch(e) {
-            searchInput.className = "input is-danger is-rounded";
-        }
-    });
-}
-
 [data-theme="dark"] {
-    background-color: #0a0a0a;
-    color: #fff;
+    background-color: #1a1a1a;
+    color: #e4e4e4;
 }
 
 [data-theme="dark"] .card {
-    background-color: #1a1a1a;
-    color: #fff;
+    background-color: #242424;
+    color: #e4e4e4;
+    border: 1px solid #363636;
 }
 
 [data-theme="dark"] .table {
-    background-color: #1a1a1a;
-    color: #fff;
+    background-color: #242424;
+    color: #e4e4e4;
 }
 
-[data-theme="dark"] .table tr:hover {
-    background-color: #2a2a2a !important;
+[data-theme="dark"] .table thead th {
+    color: #e4e4e4;
+    border-bottom-color: #363636;
 }
 
-[data-theme="dark"] .notification.is-dark {
-    background-color: #1a1a1a;
-}
-
-[data-theme="dark"] .footer {
-    background-color: #1a1a1a;
-    color: #fff;
-}
-
-[data-theme="dark"] .input {
-    background-color: #1a1a1a;
-    color: #fff;
+[data-theme="dark"] .table td {
     border-color: #363636;
 }
 
-<!-- Add switch styles -->
-<style>
-.switch-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+[data-theme="dark"] .table tr:hover {
+    background-color: #2c2c2c !important;
 }
 
-.switch[type='checkbox'] {
-    height: 0;
-    width: 0;
-    visibility: hidden;
+[data-theme="dark"] .notification.is-dark {
+    background-color: #242424;
+    color: #e4e4e4;
 }
 
-.switch[type='checkbox'] + label {
-    cursor: pointer;
-    width: 3rem;
-    height: 1.5rem;
-    background: #ddd;
-    display: block;
-    border-radius: 1.5rem;
-    position: relative;
+[data-theme="dark"] .input {
+    background-color: #242424;
+    color: #e4e4e4;
+    border-color: #363636;
 }
 
-.switch[type='checkbox'] + label:after {
-    content: '';
-    position: absolute;
-    top: 0.125rem;
-    left: 0.125rem;
-    width: 1.25rem;
-    height: 1.25rem;
-    background: #fff;
-    border-radius: 1.25rem;
-    transition: 0.3s;
+[data-theme="dark"] .input:focus {
+    border-color: #485fc7;
+    box-shadow: 0 0 0 0.125em rgba(72, 95, 199, 0.25);
 }
 
-.switch[type='checkbox']:checked + label {
-    background: #363636;
+[data-theme="dark"] .button {
+    background-color: #242424;
+    color: #e4e4e4;
+    border-color: #363636;
 }
 
-.switch[type='checkbox']:checked + label:after {
-    left: calc(100% - 0.125rem);
-    transform: translateX(-100%);
-}
-</style>
-
-<!-- Replace button with switch -->
-<div class="column">
-    <div class="switch-wrapper">
-        <input type="checkbox" id="toggleDarkMode" class="switch">
-        <label for="toggleDarkMode"></label>
-        <span class="icon">
-            <i class="fas fa-moon"></i>
-        </span>
-    </div>
-</div>
-
-<!-- Updated JavaScript -->
-<script>
-function initDarkMode() {
-    const darkModeSwitch = document.getElementById('toggleDarkMode');
-    const html = document.documentElement;
-    
-    darkModeSwitch.checked = localStorage.getItem('darkMode') === 'true';
-    if (darkModeSwitch.checked) {
-        html.setAttribute('data-theme', 'dark');
-    }
-
-    darkModeSwitch.addEventListener('change', () => {
-        html.setAttribute('data-theme', darkModeSwitch.checked ? 'dark' : 'light');
-        localStorage.setItem('darkMode', darkModeSwitch.checked);
-    });
+[data-theme="dark"] .button:hover {
+    border-color: #485fc7;
 }
 
-document.addEventListener('DOMContentLoaded', initDarkMode);
-</script>
+[data-theme="dark"] .button.is-dark {
+    background-color: #363636;
+    color: #e4e4e4;
+}
+
+[data-theme="dark"] .button.is-primary {
+    background-color: #485fc7;
+    color: #e4e4e4;
+}
+
+[data-theme="dark"] .dropdown-content {
+    background-color: #242424;
+    border: 1px solid #363636;
+}
+
+[data-theme="dark"] .dropdown-item {
+    color: #e4e4e4;
+}
+
+[data-theme="dark"] .dropdown-item:hover {
+    background-color: #2c2c2c;
+    color: #fff;
+}
+
+[data-theme="dark"] .footer {
+    background-color: #242424;
+    color: #e4e4e4;
+}
+
+[data-theme="dark"] a {
+    color: #485fc7;
+}
+
+[data-theme="dark"] a:hover {
+    color: #6477cd;
+}
+
+[data-theme="dark"] .table-striped tbody tr:nth-child(odd) {
+    background-color: #1f1f1f;
+}
+
+[data-theme="dark"] .has-background-dark {
+    background-color: #242424 !important;
+}
+
+[data-theme="dark"] .has-text-light {
+    color: #e4e4e4 !important;
+}

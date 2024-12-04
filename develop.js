@@ -55,3 +55,11 @@ function addExportButton() {
         <p>Powered by Fiat Devops</p>
     </div>
 </footer>
+
+
+
+<script>
+if (localStorage.getItem('darkMode') === 'true') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+}
+</script>

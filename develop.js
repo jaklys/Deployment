@@ -42,3 +42,16 @@ function addExportButton() {
     addExportButton();
     document.getElementById('exportTableButton').addEventListener('click', exportTableToJson);
  });
+
+ <footer class="footer">
+    <div class="content has-text-centered">
+        <div class="buttons is-centered">
+            <button class="button is-dark" id="exportTableButton">
+                Export JSON
+            </button>
+            <!-- Existing footer content -->
+        </div>
+        <p><strong>Started at </strong><%= FormatDate(startTime, tzOffset) %></p>
+        <p>Powered by Fiat Devops</p>
+    </div>
+</footer>

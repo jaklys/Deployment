@@ -1,9 +1,8 @@
-data-theme="dark"] .container,
-[data-theme="dark"] .container.is-fluid {
-    background-color: #1a1a1a;
-    color: #e4e4e4;
-}
-
-[data-theme="dark"] .tile.is-child.notification.is-dark {
-    background-color: #242424;
-}
+[data-theme="dark"] .has-background-primary {
+    background-color: #375a7f !important;
+    color: #fff !important;
+ }
+ 
+ [data-theme="dark"] tr.has-background-primary:hover {
+    background-color: #2b4764 !important;
+ }

@@ -32,7 +32,6 @@ cascade_merge_test:
         echo "⚠️  No PROJECT_ACCESS_TOKEN found - will try CI_JOB_TOKEN (read-only)"
       fi
   script:
-    # Clone test with token
     - |
       echo "Testing clone operation..."
       if [ -n "$PROJECT_ACCESS_TOKEN" ]; then
@@ -52,7 +51,6 @@ cascade_merge_test:
     - cd project
     - echo "✓ Repository cloned successfully"
     - git fetch --all --prune
-    # Extract parts from the current release branch name
     - CURRENT_BRANCH="${CI_COMMIT_REF_NAME}"
     - VERSION="${CURRENT_BRANCH##release/}"
     - TYPE_AND_YEAR="${VERSION%.*.*}"
@@ -66,13 +64,11 @@ cascade_merge_test:
     - echo "Type and Year: $TYPE_AND_YEAR"
     - echo "Suffix: $SUFFIX"
     - echo "Prefix to match: $PREFIX"
-    # Get all branches
     - |
       echo ""
       echo "Fetching remote branches..."
       ALL_BRANCHES=$(git ls-remote --heads origin | grep -E 'refs/heads/release/' | sed 's|.*refs/heads/||')
       echo "Found $(echo "$ALL_BRANCHES" | wc -l) release branches total"
-    # Find matching branches
     - |
       MATCHING_BRANCHES=$(echo "$ALL_BRANCHES" | grep "^$PREFIX\\." || true)
       if [ -n "$MATCHING_BRANCHES" ]; then
@@ -82,7 +78,6 @@ cascade_merge_test:
       else
         echo "No branches found with prefix $PREFIX"
       fi
-    # Collect newer release branches
     - TARGET_BRANCHES=""
     - BRANCH_COUNT=0
     - |
@@ -99,7 +94,6 @@ cascade_merge_test:
           echo "✗ (older or same - skip)"
         fi
       done
-    # Check for master/main
     - |
       echo ""
       echo "Checking for master/main branches..."
@@ -128,7 +122,6 @@ cascade_merge_test:
       else
         echo "No target branches found!"
       fi
-    # Test API access
     - |
       echo ""
       echo "Testing GitLab API access..."
@@ -142,7 +135,6 @@ cascade_merge_test:
           echo "✗ API access failed (HTTP $API_TEST)"
         fi
       fi
-    # Simulate processing each branch
     - |
       if [ $BRANCH_COUNT -gt 0 ]; then
         echo ""
@@ -187,7 +179,6 @@ cascade_merge_test:
           git reset --hard HEAD >/dev/null 2>&1
         done
       fi
-    # Summary
     - |
       echo ""
       echo "========================================="

@@ -8,51 +8,53 @@ cascade_merge_test:
     - if: '$CI_COMMIT_REF_NAME =~ /^release\/[A-Za-z]+\.[A-Za-z]+\.\d{4}\.\d{2}\.\d{2}$/ && $CI_MERGE_REQUEST_LABELS !~ /auto-cascade/'
     - if: '$CI_COMMIT_REF_NAME =~ /^release\/[A-Za-z]+\.[A-Za-z]+\.\d{4}\.\d{2}\.\d{2}$/ && $CI_PIPELINE_SOURCE == "push"'
   variables:
-    GIT_SSH_COMMAND: 'ssh -o StrictHostKeyChecking=no'
     GIT_STRATEGY: none
     MAX_MERGE_TARGETS: 50
     CREATE_MR_ON_CONFLICT: "true"
+    # GitLab URL - změňte na vaši instanci
+    GITLAB_URL: "gitlab.com"  # nebo např. "gitlab.company.com"
+    PROJECT_PATH: "your-group/your-project"  # změňte na váš projekt
   before_script:
-    - apk add --no-cache git openssh bash jq curl
+    - apk add --no-cache git bash jq curl
     - echo "========================================="
     - echo "CASCADE MERGE TEST MODE (DRY RUN)"
     - echo "========================================="
     - git config --global user.name "CI Bot"
     - git config --global user.email "ci-bot@example.com"
-    # Test SSH/Token access
     - |
+      echo "Configuration:"
+      echo "  GitLab URL: $GITLAB_URL"
+      echo "  Project: $PROJECT_PATH"
+      echo ""
       echo "Testing repository access..."
-      if [ -n "$SSH_PRIVATE_KEY" ]; then
-        echo "✓ SSH_PRIVATE_KEY is set"
-        eval $(ssh-agent -s)
-        echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-      elif [ -n "$PROJECT_ACCESS_TOKEN" ]; then
+      if [ -n "$PROJECT_ACCESS_TOKEN" ]; then
         echo "✓ PROJECT_ACCESS_TOKEN is set"
       else
-        echo "✗ No SSH_PRIVATE_KEY or PROJECT_ACCESS_TOKEN found!"
+        echo "⚠️  No PROJECT_ACCESS_TOKEN found - will try CI_JOB_TOKEN (read-only)"
       fi
   script:
-    # Clone test
+    # Clone test with token
     - |
       echo "Testing clone operation..."
-      if [ -n "$SSH_PRIVATE_KEY" ]; then
-        echo "Would clone: git@gitlab.com:your-group/your-project.git"
-        git clone --depth=1 git@gitlab.com:your-group/your-project.git project || echo "✗ Clone failed - check your SSH key and repository URL"
+      if [ -n "$PROJECT_ACCESS_TOKEN" ]; then
+        CLONE_URL="https://oauth2:${PROJECT_ACCESS_TOKEN}@${GITLAB_URL}/${PROJECT_PATH}.git"
+        echo "Clone URL: https://oauth2:[MASKED]@${GITLAB_URL}/${PROJECT_PATH}.git"
       else
-        echo "Would clone: https://oauth2:TOKEN@gitlab.com/your-group/your-project.git"
-        git clone --depth=1 https://oauth2:${PROJECT_ACCESS_TOKEN}@gitlab.com/your-group/your-project.git project || echo "✗ Clone failed - check your token and repository URL"
+        CLONE_URL="https://gitlab-ci-token:${CI_JOB_TOKEN}@${GITLAB_URL}/${PROJECT_PATH}.git"
+        echo "Clone URL: https://gitlab-ci-token:[MASKED]@${GITLAB_URL}/${PROJECT_PATH}.git"
+        echo "⚠️  WARNING: CI_JOB_TOKEN cannot push changes! Add PROJECT_ACCESS_TOKEN for full functionality."
       fi
+      
+      echo "Executing: git clone --depth=1 [MASKED_URL] project"
+      git clone --depth=1 "$CLONE_URL" project || {
+        echo "✗ Clone failed - check your token and project path"
+        exit 1
+      }
     
     - |
-      if [ -d "project" ]; then
-        cd project
-        echo "✓ Repository cloned successfully"
-      else
-        echo "✗ Failed to clone repository - exiting"
-        exit 1
-      fi
-    
-    - git fetch --all --prune
+      cd project
+      echo "✓ Repository cloned successfully"
+      git fetch --all --prune
     
     # Extract parts from the current release branch name
     - CURRENT_BRANCH="${CI_COMMIT_REF_NAME}"
@@ -137,6 +139,21 @@ cascade_merge_test:
         echo "No target branches found!"
       fi
     
+    # Test API access
+    - |
+      echo ""
+      echo "Testing GitLab API access..."
+      if [ -n "$PROJECT_ACCESS_TOKEN" ]; then
+        API_TEST=$(curl -s -o /dev/null -w "%{http_code}" \
+          --header "PRIVATE-TOKEN: ${PROJECT_ACCESS_TOKEN}" \
+          "https://${GITLAB_URL}/api/v4/projects/${CI_PROJECT_ID}")
+        if [ "$API_TEST" = "200" ]; then
+          echo "✓ API access successful"
+        else
+          echo "✗ API access failed (HTTP $API_TEST)"
+        fi
+      fi
+    
     # Simulate processing each branch
     - |
       if [ $BRANCH_COUNT -gt 0 ]; then
@@ -174,7 +191,16 @@ cascade_merge_test:
               MERGE_BRANCH="auto-merge/${CI_COMMIT_REF_NAME//\//-}-to-${TARGET//\//-}-$(date +%s)"
               echo "Would create branch: $MERGE_BRANCH"
               echo "Would create MR with labels: [auto-cascade, merge-conflict]"
-              echo "Would POST to: https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests"
+              echo ""
+              echo "Would call API:"
+              echo "  POST https://${GITLAB_URL}/api/v4/projects/$CI_PROJECT_ID/merge_requests"
+              echo "  Header: PRIVATE-TOKEN: [MASKED]"
+              echo "  Body: {"
+              echo "    source_branch: $MERGE_BRANCH"
+              echo "    target_branch: $TARGET"
+              echo "    title: [Auto] Cascade merge from $CI_COMMIT_REF_NAME to $TARGET"
+              echo "    labels: [auto-cascade, merge-conflict]"
+              echo "  }"
             fi
           fi
           
@@ -191,11 +217,20 @@ cascade_merge_test:
       echo "========================================="
       echo "This was a TEST RUN - no actual changes were made"
       echo ""
-      echo "Environment variables:"
-      echo "  CI_PROJECT_ID: ${CI_PROJECT_ID:-not set}"
-      echo "  CI_COMMIT_REF_NAME: $CI_COMMIT_REF_NAME"
-      echo "  CI_PIPELINE_SOURCE: $CI_PIPELINE_SOURCE"
-      echo "  CI_MERGE_REQUEST_LABELS: ${CI_MERGE_REQUEST_LABELS:-none}"
+      echo "Environment check:"
+      echo "  ✓ GitLab URL: $GITLAB_URL"
+      echo "  ✓ Project Path: $PROJECT_PATH"
+      echo "  ✓ CI_PROJECT_ID: $CI_PROJECT_ID"
+      echo "  ✓ CI_COMMIT_REF_NAME: $CI_COMMIT_REF_NAME"
+      echo "  ✓ CI_PIPELINE_SOURCE: $CI_PIPELINE_SOURCE"
+      echo "  ✓ CI_MERGE_REQUEST_LABELS: ${CI_MERGE_REQUEST_LABELS:-none}"
+      if [ -n "$PROJECT_ACCESS_TOKEN" ]; then
+        echo "  ✓ PROJECT_ACCESS_TOKEN: set"
+      else
+        echo "  ⚠️  PROJECT_ACCESS_TOKEN: not set"
+      fi
       echo ""
-      echo "To run the actual merge, replace 'cascade_merge_test' with 'cascade_merge'"
-      echo "and remove all 'Would execute:' prefixes"
+      echo "Next steps:"
+      echo "1. Verify the output above looks correct"
+      echo "2. Change 'cascade_merge_test' to 'cascade_merge'"
+      echo "3. Remove echo/Would prefixes for actual execution"

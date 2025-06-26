@@ -11,9 +11,8 @@ cascade_merge_test:
     GIT_STRATEGY: none
     MAX_MERGE_TARGETS: 50
     CREATE_MR_ON_CONFLICT: "true"
-    # GitLab URL - změňte na vaši instanci
-    GITLAB_URL: "gitlab.com"  # nebo např. "gitlab.company.com"
-    PROJECT_PATH: "your-group/your-project"  # změňte na váš projekt
+    GITLAB_URL: "gitlab.com"
+    PROJECT_PATH: "your-group/your-project"
   before_script:
     - apk add --no-cache git bash jq curl
     - echo "========================================="
@@ -50,19 +49,15 @@ cascade_merge_test:
         echo "✗ Clone failed - check your token and project path"
         exit 1
       }
-    
-    - |
-      cd project
-      echo "✓ Repository cloned successfully"
-      git fetch --all --prune
-    
+    - cd project
+    - echo "✓ Repository cloned successfully"
+    - git fetch --all --prune
     # Extract parts from the current release branch name
     - CURRENT_BRANCH="${CI_COMMIT_REF_NAME}"
     - VERSION="${CURRENT_BRANCH##release/}"
     - TYPE_AND_YEAR="${VERSION%.*.*}"
     - SUFFIX="${VERSION##$TYPE_AND_YEAR.}"
     - PREFIX="release/$TYPE_AND_YEAR"
-    
     - echo ""
     - echo "Branch Analysis:"
     - echo "================"
@@ -71,14 +66,12 @@ cascade_merge_test:
     - echo "Type and Year: $TYPE_AND_YEAR"
     - echo "Suffix: $SUFFIX"
     - echo "Prefix to match: $PREFIX"
-    
     # Get all branches
     - |
       echo ""
       echo "Fetching remote branches..."
       ALL_BRANCHES=$(git ls-remote --heads origin | grep -E 'refs/heads/release/' | sed 's|.*refs/heads/||')
       echo "Found $(echo "$ALL_BRANCHES" | wc -l) release branches total"
-    
     # Find matching branches
     - |
       MATCHING_BRANCHES=$(echo "$ALL_BRANCHES" | grep "^$PREFIX\\." || true)
@@ -89,7 +82,6 @@ cascade_merge_test:
       else
         echo "No branches found with prefix $PREFIX"
       fi
-    
     # Collect newer release branches
     - TARGET_BRANCHES=""
     - BRANCH_COUNT=0
@@ -107,7 +99,6 @@ cascade_merge_test:
           echo "✗ (older or same - skip)"
         fi
       done
-    
     # Check for master/main
     - |
       echo ""
@@ -122,7 +113,6 @@ cascade_merge_test:
         TARGET_BRANCHES="$TARGET_BRANCHES main"
         ((BRANCH_COUNT++))
       fi
-    
     - |
       echo ""
       echo "========================================="
@@ -138,7 +128,6 @@ cascade_merge_test:
       else
         echo "No target branches found!"
       fi
-    
     # Test API access
     - |
       echo ""
@@ -153,7 +142,6 @@ cascade_merge_test:
           echo "✗ API access failed (HTTP $API_TEST)"
         fi
       fi
-    
     # Simulate processing each branch
     - |
       if [ $BRANCH_COUNT -gt 0 ]; then
@@ -169,11 +157,9 @@ cascade_merge_test:
           echo "[$MERGE_ATTEMPTS/$BRANCH_COUNT] Target: $TARGET"
           echo "----------------------------------------"
           
-          # Simulate checkout
           echo "Would execute: git checkout -B $TARGET origin/$TARGET"
           git checkout -B $TARGET origin/$TARGET 2>/dev/null && echo "✓ Checkout successful" || echo "✗ Checkout would fail"
           
-          # Check if merge would work
           echo "Would execute: git merge origin/$CI_COMMIT_REF_NAME --no-ff --no-commit"
           if git merge origin/$CI_COMMIT_REF_NAME --no-ff --no-commit >/dev/null 2>&1; then
             if git diff --cached --quiet; then
@@ -194,21 +180,13 @@ cascade_merge_test:
               echo ""
               echo "Would call API:"
               echo "  POST https://${GITLAB_URL}/api/v4/projects/$CI_PROJECT_ID/merge_requests"
-              echo "  Header: PRIVATE-TOKEN: [MASKED]"
-              echo "  Body: {"
-              echo "    source_branch: $MERGE_BRANCH"
-              echo "    target_branch: $TARGET"
-              echo "    title: [Auto] Cascade merge from $CI_COMMIT_REF_NAME to $TARGET"
-              echo "    labels: [auto-cascade, merge-conflict]"
-              echo "  }"
+              echo "  With auto-cascade label to prevent loops"
             fi
           fi
           
-          # Reset for next iteration
           git reset --hard HEAD >/dev/null 2>&1
         done
       fi
-    
     # Summary
     - |
       echo ""

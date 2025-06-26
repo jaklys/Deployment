@@ -1,97 +1,252 @@
 stages:
-  - cascade-merge
+ - cascade-merge
 
 cascade_merge:
-  stage: cascade-merge
-  image: alpine:latest
-  only:
-    refs:
-      - /^release\/[A-Za-z]+\.[A-Za-z]+\.\d{4}\.\d{2}\.\d{2}$/
-  variables:
-    GIT_SSH_COMMAND: 'ssh -o StrictHostKeyChecking=no'
-    GIT_STRATEGY: none  # Prevent automatic checkout
-  before_script:
-    - apk add --no-cache git openssh bash
-    - git config --global user.name "CI Bot"
-    - git config --global user.email "ci-bot@example.com"
-    - eval $(ssh-agent -s)
-    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-  script:
-    # Clone the repo
-    - git clone git@gitlab.com:your-group/your-project.git project
-    - cd project
-    - git fetch origin
-    
-    # Extract parts from the current release branch name
-    - CURRENT_BRANCH="${CI_COMMIT_REF_NAME}"
-    - VERSION="${CURRENT_BRANCH##release/}"
-    - TYPE_AND_YEAR="${VERSION%.*.*}"
-    - SUFFIX="${VERSION##$TYPE_AND_YEAR.}"
-    - PREFIX="release/$TYPE_AND_YEAR"
-    
-    - echo "Current branch: $CURRENT_BRANCH"
-    - echo "Prefix to match: $PREFIX"
-    - echo "Suffix version: $SUFFIX"
-    
-    # Get all branches and filter
-    - ALL_BRANCHES=$(git branch -r | grep -E '^\s*origin/release/' | sed 's|^\s*origin/||' | grep -v HEAD)
-    
-    # Collect newer release branches with same prefix
-    - TARGET_BRANCHES=""
-    - |
-      for BRANCH in $ALL_BRANCHES; do
-        if [[ "$BRANCH" == $PREFIX.* ]]; then
-          OTHER_SUFFIX="${BRANCH##$PREFIX.}"
-          if [[ "$OTHER_SUFFIX" > "$SUFFIX" ]]; then
-            TARGET_BRANCHES="$TARGET_BRANCHES $BRANCH"
-          fi
-        fi
-      done
-    
-    # Always add master to the merge targets
-    - TARGET_BRANCHES="$TARGET_BRANCHES master"
-    - echo "Merge targets: $TARGET_BRANCHES"
-    
-    # Track failures
-    - FAILED_MERGES=""
-    
-    # Iterate through targets and merge
-    - |
-      for TARGET in $TARGET_BRANCHES; do
-        echo "========================================="
-        echo "Merging into $TARGET"
-        echo "========================================="
-        
-        # Clean any previous merge state
-        git reset --hard
-        git clean -fd
-        
-        # Checkout target branch
-        git checkout -B $TARGET origin/$TARGET
-        
-        # Attempt merge
-        if git merge origin/$CI_COMMIT_REF_NAME --no-ff -m "Cascade merge from $CI_COMMIT_REF_NAME to $TARGET"; then
-          echo "Merge successful, pushing..."
-          if git push origin $TARGET; then
-            echo "✓ Successfully merged and pushed to $TARGET"
-          else
-            echo "✗ Push failed for $TARGET"
-            FAILED_MERGES="$FAILED_MERGES $TARGET"
-          fi
-        else
-          echo "✗ Merge conflict in $TARGET - skipping"
-          FAILED_MERGES="$FAILED_MERGES $TARGET"
-          git merge --abort
-        fi
-      done
-    
-    # Report results
-    - |
-      if [ -n "$FAILED_MERGES" ]; then
-        echo "========================================="
-        echo "FAILED MERGES:$FAILED_MERGES"
-        echo "========================================="
-        exit 1
-      else
-        echo "All merges completed successfully!"
-      fi
+ stage: cascade-merge
+ image: alpine:latest
+ rules:
+   # Run only on release branches WITHOUT auto-cascade label
+   - if: '$CI_COMMIT_REF_NAME =~ /^release\/[A-Za-z]+\.[A-Za-z]+\.\d{4}\.\d{2}\.\d{2}$/ && $CI_MERGE_REQUEST_LABELS !~ /auto-cascade/'
+   # Also run on direct pushes to release branches (not from MR)
+   - if: '$CI_COMMIT_REF_NAME =~ /^release\/[A-Za-z]+\.[A-Za-z]+\.\d{4}\.\d{2}\.\d{2}$/ && $CI_PIPELINE_SOURCE == "push"'
+ variables:
+   GIT_SSH_COMMAND: 'ssh -o StrictHostKeyChecking=no'
+   GIT_STRATEGY: none
+   MAX_MERGE_TARGETS: 50
+   CREATE_MR_ON_CONFLICT: "true"
+ timeout: 3 hours
+ retry:
+   max: 2
+   when:
+     - runner_system_failure
+     - stuck_or_timeout_failure
+ before_script:
+   - apk add --no-cache git openssh bash jq curl
+   - git config --global user.name "CI Bot"
+   - git config --global user.email "ci-bot@example.com"
+   - eval $(ssh-agent -s)
+   - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+ script:
+   # Clone the repo
+   - git clone --depth=50 git@gitlab.com:your-group/your-project.git project
+   - cd project
+   - git fetch --all --prune
+   
+   # Extract parts from the current release branch name
+   - CURRENT_BRANCH="${CI_COMMIT_REF_NAME}"
+   - VERSION="${CURRENT_BRANCH##release/}"
+   - TYPE_AND_YEAR="${VERSION%.*.*}"
+   - SUFFIX="${VERSION##$TYPE_AND_YEAR.}"
+   - PREFIX="release/$TYPE_AND_YEAR"
+   
+   - echo "Current branch: $CURRENT_BRANCH"
+   - echo "Prefix to match: $PREFIX"
+   - echo "Suffix version: $SUFFIX"
+   
+   # Get all branches efficiently
+   - |
+     ALL_BRANCHES=$(git ls-remote --heads origin | 
+                    grep -E 'refs/heads/release/' | 
+                    sed 's|.*refs/heads/||' | 
+                    grep "^$PREFIX\\.")
+   
+   # Collect newer release branches with same prefix
+   - TARGET_BRANCHES=""
+   - BRANCH_COUNT=0
+   - |
+     for BRANCH in $ALL_BRANCHES; do
+       OTHER_SUFFIX="${BRANCH##$PREFIX.}"
+       if [[ "$OTHER_SUFFIX" > "$SUFFIX" ]]; then
+         TARGET_BRANCHES="$TARGET_BRANCHES $BRANCH"
+         ((BRANCH_COUNT++))
+       fi
+     done
+   
+   # Always add master/main to the merge targets
+   - |
+     if git ls-remote --heads origin | grep -q 'refs/heads/master'; then
+       TARGET_BRANCHES="$TARGET_BRANCHES master"
+       ((BRANCH_COUNT++))
+     fi
+     if git ls-remote --heads origin | grep -q 'refs/heads/main'; then
+       TARGET_BRANCHES="$TARGET_BRANCHES main"
+       ((BRANCH_COUNT++))
+     fi
+   
+   - echo "Found $BRANCH_COUNT merge targets"
+   
+   # Safety check
+   - |
+     if [ $BRANCH_COUNT -eq 0 ]; then
+       echo "No target branches found for cascade merge"
+       exit 0
+     fi
+     if [ $BRANCH_COUNT -gt $MAX_MERGE_TARGETS ]; then
+       echo "ERROR: Found $BRANCH_COUNT branches, exceeding MAX_MERGE_TARGETS ($MAX_MERGE_TARGETS)"
+       exit 1
+     fi
+   
+   # Initialize tracking
+   - FAILED_MERGES=""
+   - SUCCESSFUL_MERGES=""
+   - CONFLICT_BRANCHES=""
+   - CREATED_MRS=""
+   - MERGE_ATTEMPTS=0
+   
+   # Process each target branch
+   - |
+     for TARGET in $TARGET_BRANCHES; do
+       ((MERGE_ATTEMPTS++))
+       echo "========================================="
+       echo "[$MERGE_ATTEMPTS/$BRANCH_COUNT] Processing: $TARGET"
+       echo "========================================="
+       
+       # Clean workspace
+       git reset --hard HEAD
+       git clean -fdx
+       
+       # Checkout target branch
+       if ! git checkout -B $TARGET origin/$TARGET; then
+         echo "✗ Failed to checkout $TARGET"
+         FAILED_MERGES="$FAILED_MERGES $TARGET"
+         continue
+       fi
+       
+       # Try direct merge first
+       if git merge origin/$CI_COMMIT_REF_NAME --no-ff --no-commit; then
+         # Check if there are actual changes
+         if git diff --cached --quiet; then
+           echo "ℹ️  No changes to merge to $TARGET (already up-to-date)"
+           git merge --abort
+           continue
+         fi
+         
+         # Commit and push the merge
+         git commit -m "Cascade merge from $CI_COMMIT_REF_NAME to $TARGET [skip ci]"
+         
+         # Try to push with retries
+         PUSH_RETRY=0
+         PUSH_SUCCESS=false
+         while [ $PUSH_RETRY -lt 3 ]; do
+           if git push origin $TARGET; then
+             PUSH_SUCCESS=true
+             break
+           fi
+           ((PUSH_RETRY++))
+           echo "Push attempt $PUSH_RETRY failed, retrying in 5s..."
+           sleep 5
+         done
+         
+         if [ "$PUSH_SUCCESS" = true ]; then
+           SUCCESSFUL_MERGES="$SUCCESSFUL_MERGES $TARGET"
+           echo "✓ Successfully merged to $TARGET"
+         else
+           FAILED_MERGES="$FAILED_MERGES $TARGET"
+           echo "✗ Push failed for $TARGET"
+         fi
+       else
+         # Conflict detected
+         echo "⚠️  Merge conflict detected with $TARGET"
+         git merge --abort
+         CONFLICT_BRANCHES="$CONFLICT_BRANCHES $TARGET"
+         
+         # Create MR if enabled
+         if [[ "$CREATE_MR_ON_CONFLICT" == "true" ]]; then
+           # Create a branch for the merge
+           MERGE_BRANCH="auto-merge/${CI_COMMIT_REF_NAME//\//-}-to-${TARGET//\//-}-$(date +%s)"
+           git checkout -b $MERGE_BRANCH origin/$TARGET
+           
+           # Try to merge with conflicts
+           git merge origin/$CI_COMMIT_REF_NAME --no-ff || true
+           
+           # Check if there are actually conflicts or changes
+           if git diff --quiet && git diff --cached --quiet; then
+             echo "No changes to push for $TARGET"
+             continue
+           fi
+           
+           # Stage all changes
+           git add -A || true
+           
+           # Commit (will fail if no changes)
+           if git commit -m "Cascade merge from $CI_COMMIT_REF_NAME to $TARGET (with conflicts)"; then
+             # Push the branch
+             if git push origin $MERGE_BRANCH; then
+               # Create MR via API
+               MR_RESPONSE=$(curl --silent --request POST \
+                 --header "PRIVATE-TOKEN: ${PROJECT_ACCESS_TOKEN:-$CI_JOB_TOKEN}" \
+                 --header "Content-Type: application/json" \
+                 --data "{
+                   \"source_branch\": \"$MERGE_BRANCH\",
+                   \"target_branch\": \"$TARGET\",
+                   \"title\": \"[Auto] Cascade merge from $CI_COMMIT_REF_NAME to $TARGET\",
+                   \"description\": \"This MR was automatically created by the cascade merge pipeline.\n\n⚠️ **This MR contains conflicts that need to be resolved manually**\n\nSource: \`$CI_COMMIT_REF_NAME\`\nTarget: \`$TARGET\`\nPipeline: \`$CI_PIPELINE_ID\`\",
+                   \"remove_source_branch\": true,
+                   \"labels\": [\"auto-cascade\", \"merge-conflict\"]
+                 }" \
+                 "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests")
+               
+               MR_IID=$(echo $MR_RESPONSE | jq -r '.iid // empty')
+               MR_URL=$(echo $MR_RESPONSE | jq -r '.web_url // empty')
+               
+               if [ -n "$MR_IID" ]; then
+                 CREATED_MRS="$CREATED_MRS !$MR_IID"
+                 echo "📋 Created MR !$MR_IID for manual conflict resolution"
+                 echo "   URL: $MR_URL"
+               else
+                 echo "✗ Failed to create MR for $TARGET"
+                 echo "   Response: $MR_RESPONSE"
+               fi
+             else
+               echo "✗ Failed to push merge branch for $TARGET"
+             fi
+           else
+             echo "ℹ️  No changes to commit for $TARGET"
+           fi
+         fi
+       fi
+     done
+   
+   # Generate summary
+   - |
+     echo ""
+     echo "========================================="
+     echo "CASCADE MERGE SUMMARY"
+     echo "========================================="
+     echo "Total branches processed: $BRANCH_COUNT"
+     echo "Successful merges: $(echo $SUCCESSFUL_MERGES | wc -w)"
+     echo "Failed merges: $(echo $FAILED_MERGES | wc -w)"
+     echo "Conflicts requiring manual resolution: $(echo $CONFLICT_BRANCHES | wc -w)"
+     echo "MRs created: $(echo $CREATED_MRS | wc -w)"
+     
+     if [ -n "$SUCCESSFUL_MERGES" ]; then
+       echo ""
+       echo "✓ Successfully merged to:"
+       for BRANCH in $SUCCESSFUL_MERGES; do
+         echo "  - $BRANCH"
+       done
+     fi
+     
+     if [ -n "$CREATED_MRS" ]; then
+       echo ""
+       echo "📋 Created MRs:"
+       echo "  $CREATED_MRS"
+     fi
+     
+     if [ -n "$FAILED_MERGES" ]; then
+       echo ""
+       echo "✗ Failed merges:"
+       for BRANCH in $FAILED_MERGES; do
+         echo "  - $BRANCH"
+       done
+     fi
+     
+     # Exit with appropriate code
+     if [ -n "$FAILED_MERGES" ]; then
+       echo ""
+       echo "⚠️  Some merges failed. Please check the logs above."
+       exit 1
+     else
+       echo ""
+       echo "✅ Cascade merge process completed successfully!"
+     fi

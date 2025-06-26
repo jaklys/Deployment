@@ -1,0 +1,201 @@
+stages:
+  - cascade-merge
+
+cascade_merge_test:
+  stage: cascade-merge
+  image: alpine:latest
+  rules:
+    - if: '$CI_COMMIT_REF_NAME =~ /^release\/[A-Za-z]+\.[A-Za-z]+\.\d{4}\.\d{2}\.\d{2}$/ && $CI_MERGE_REQUEST_LABELS !~ /auto-cascade/'
+    - if: '$CI_COMMIT_REF_NAME =~ /^release\/[A-Za-z]+\.[A-Za-z]+\.\d{4}\.\d{2}\.\d{2}$/ && $CI_PIPELINE_SOURCE == "push"'
+  variables:
+    GIT_SSH_COMMAND: 'ssh -o StrictHostKeyChecking=no'
+    GIT_STRATEGY: none
+    MAX_MERGE_TARGETS: 50
+    CREATE_MR_ON_CONFLICT: "true"
+  before_script:
+    - apk add --no-cache git openssh bash jq curl
+    - echo "========================================="
+    - echo "CASCADE MERGE TEST MODE (DRY RUN)"
+    - echo "========================================="
+    - git config --global user.name "CI Bot"
+    - git config --global user.email "ci-bot@example.com"
+    # Test SSH/Token access
+    - |
+      echo "Testing repository access..."
+      if [ -n "$SSH_PRIVATE_KEY" ]; then
+        echo "✓ SSH_PRIVATE_KEY is set"
+        eval $(ssh-agent -s)
+        echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+      elif [ -n "$PROJECT_ACCESS_TOKEN" ]; then
+        echo "✓ PROJECT_ACCESS_TOKEN is set"
+      else
+        echo "✗ No SSH_PRIVATE_KEY or PROJECT_ACCESS_TOKEN found!"
+      fi
+  script:
+    # Clone test
+    - |
+      echo "Testing clone operation..."
+      if [ -n "$SSH_PRIVATE_KEY" ]; then
+        echo "Would clone: git@gitlab.com:your-group/your-project.git"
+        git clone --depth=1 git@gitlab.com:your-group/your-project.git project || echo "✗ Clone failed - check your SSH key and repository URL"
+      else
+        echo "Would clone: https://oauth2:TOKEN@gitlab.com/your-group/your-project.git"
+        git clone --depth=1 https://oauth2:${PROJECT_ACCESS_TOKEN}@gitlab.com/your-group/your-project.git project || echo "✗ Clone failed - check your token and repository URL"
+      fi
+    
+    - |
+      if [ -d "project" ]; then
+        cd project
+        echo "✓ Repository cloned successfully"
+      else
+        echo "✗ Failed to clone repository - exiting"
+        exit 1
+      fi
+    
+    - git fetch --all --prune
+    
+    # Extract parts from the current release branch name
+    - CURRENT_BRANCH="${CI_COMMIT_REF_NAME}"
+    - VERSION="${CURRENT_BRANCH##release/}"
+    - TYPE_AND_YEAR="${VERSION%.*.*}"
+    - SUFFIX="${VERSION##$TYPE_AND_YEAR.}"
+    - PREFIX="release/$TYPE_AND_YEAR"
+    
+    - echo ""
+    - echo "Branch Analysis:"
+    - echo "================"
+    - echo "Current branch: $CURRENT_BRANCH"
+    - echo "Version: $VERSION"
+    - echo "Type and Year: $TYPE_AND_YEAR"
+    - echo "Suffix: $SUFFIX"
+    - echo "Prefix to match: $PREFIX"
+    
+    # Get all branches
+    - |
+      echo ""
+      echo "Fetching remote branches..."
+      ALL_BRANCHES=$(git ls-remote --heads origin | grep -E 'refs/heads/release/' | sed 's|.*refs/heads/||')
+      echo "Found $(echo "$ALL_BRANCHES" | wc -l) release branches total"
+    
+    # Find matching branches
+    - |
+      MATCHING_BRANCHES=$(echo "$ALL_BRANCHES" | grep "^$PREFIX\\." || true)
+      if [ -n "$MATCHING_BRANCHES" ]; then
+        echo ""
+        echo "Branches with same prefix ($PREFIX):"
+        echo "$MATCHING_BRANCHES" | sed 's/^/  - /'
+      else
+        echo "No branches found with prefix $PREFIX"
+      fi
+    
+    # Collect newer release branches
+    - TARGET_BRANCHES=""
+    - BRANCH_COUNT=0
+    - |
+      echo ""
+      echo "Analyzing version numbers..."
+      for BRANCH in $MATCHING_BRANCHES; do
+        OTHER_SUFFIX="${BRANCH##$PREFIX.}"
+        echo -n "  - $BRANCH: suffix=$OTHER_SUFFIX "
+        if [[ "$OTHER_SUFFIX" > "$SUFFIX" ]]; then
+          echo "✓ (newer - will merge)"
+          TARGET_BRANCHES="$TARGET_BRANCHES $BRANCH"
+          ((BRANCH_COUNT++))
+        else
+          echo "✗ (older or same - skip)"
+        fi
+      done
+    
+    # Check for master/main
+    - |
+      echo ""
+      echo "Checking for master/main branches..."
+      if git ls-remote --heads origin | grep -q 'refs/heads/master'; then
+        echo "✓ Found master branch"
+        TARGET_BRANCHES="$TARGET_BRANCHES master"
+        ((BRANCH_COUNT++))
+      fi
+      if git ls-remote --heads origin | grep -q 'refs/heads/main'; then
+        echo "✓ Found main branch"
+        TARGET_BRANCHES="$TARGET_BRANCHES main"
+        ((BRANCH_COUNT++))
+      fi
+    
+    - |
+      echo ""
+      echo "========================================="
+      echo "CASCADE MERGE PLAN"
+      echo "========================================="
+      echo "From: $CURRENT_BRANCH"
+      echo "Total targets: $BRANCH_COUNT"
+      if [ -n "$TARGET_BRANCHES" ]; then
+        echo "Will merge to:"
+        for TARGET in $TARGET_BRANCHES; do
+          echo "  → $TARGET"
+        done
+      else
+        echo "No target branches found!"
+      fi
+    
+    # Simulate processing each branch
+    - |
+      if [ $BRANCH_COUNT -gt 0 ]; then
+        echo ""
+        echo "========================================="
+        echo "SIMULATING MERGE OPERATIONS"
+        echo "========================================="
+        MERGE_ATTEMPTS=0
+        
+        for TARGET in $TARGET_BRANCHES; do
+          ((MERGE_ATTEMPTS++))
+          echo ""
+          echo "[$MERGE_ATTEMPTS/$BRANCH_COUNT] Target: $TARGET"
+          echo "----------------------------------------"
+          
+          # Simulate checkout
+          echo "Would execute: git checkout -B $TARGET origin/$TARGET"
+          git checkout -B $TARGET origin/$TARGET 2>/dev/null && echo "✓ Checkout successful" || echo "✗ Checkout would fail"
+          
+          # Check if merge would work
+          echo "Would execute: git merge origin/$CI_COMMIT_REF_NAME --no-ff --no-commit"
+          if git merge origin/$CI_COMMIT_REF_NAME --no-ff --no-commit >/dev/null 2>&1; then
+            if git diff --cached --quiet; then
+              echo "ℹ️  Result: No changes (already merged)"
+            else
+              echo "✓ Result: Clean merge possible"
+              echo "Would execute: git push origin $TARGET"
+            fi
+            git merge --abort 2>/dev/null
+          else
+            echo "⚠️  Result: Merge conflict detected!"
+            git merge --abort 2>/dev/null
+            
+            if [[ "$CREATE_MR_ON_CONFLICT" == "true" ]]; then
+              MERGE_BRANCH="auto-merge/${CI_COMMIT_REF_NAME//\//-}-to-${TARGET//\//-}-$(date +%s)"
+              echo "Would create branch: $MERGE_BRANCH"
+              echo "Would create MR with labels: [auto-cascade, merge-conflict]"
+              echo "Would POST to: https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests"
+            fi
+          fi
+          
+          # Reset for next iteration
+          git reset --hard HEAD >/dev/null 2>&1
+        done
+      fi
+    
+    # Summary
+    - |
+      echo ""
+      echo "========================================="
+      echo "DRY RUN COMPLETE"
+      echo "========================================="
+      echo "This was a TEST RUN - no actual changes were made"
+      echo ""
+      echo "Environment variables:"
+      echo "  CI_PROJECT_ID: ${CI_PROJECT_ID:-not set}"
+      echo "  CI_COMMIT_REF_NAME: $CI_COMMIT_REF_NAME"
+      echo "  CI_PIPELINE_SOURCE: $CI_PIPELINE_SOURCE"
+      echo "  CI_MERGE_REQUEST_LABELS: ${CI_MERGE_REQUEST_LABELS:-none}"
+      echo ""
+      echo "To run the actual merge, replace 'cascade_merge_test' with 'cascade_merge'"
+      echo "and remove all 'Would execute:' prefixes"

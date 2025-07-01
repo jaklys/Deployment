@@ -44,7 +44,7 @@ test_git_push_rights:
       git add test.txt
       git commit -m "Test commit"
       
-      if git push origin test-$CI_PIPELINE_ID 2>/dev/null; then
+      if git push origin test-$CI_PIPELINE_ID 2>&1; then
         echo "   ✅ Can create and push branches"
         CAN_PUSH_BRANCH="YES"
       else
@@ -63,13 +63,13 @@ test_git_push_rights:
       
       # Try merge
       if git merge test-$CI_PIPELINE_ID --no-ff -m "Test merge [skip ci]"; then
-        if git push origin master 2>/dev/null; then
+        if git push origin master 2>&1; then
           echo "   ✅ Can merge to master (Maintainer/Owner rights)"
           CAN_PUSH_MASTER="YES"
           
           # Create revert commit instead of force push
           git revert HEAD --no-edit -m 1
-          git push origin master 2>/dev/null
+          git push origin master 2>&1
         else
           echo "   ❌ Cannot push merge to master (Developer rights)"
           CAN_PUSH_MASTER="NO"
@@ -81,7 +81,7 @@ test_git_push_rights:
       fi
       
       # Cleanup
-      git push --delete origin test-$CI_PIPELINE_ID 2>/dev/null || true
+      git push --delete origin test-$CI_PIPELINE_ID 2>&1 || true
       
       # Summary
       echo ""

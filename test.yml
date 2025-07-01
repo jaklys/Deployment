@@ -52,12 +52,13 @@ test_git_push_rights:
       # Test 1: Create and push test branch
       echo ""
       echo "1. Testing push to regular branch..."
-      git checkout -b test-$CI_PIPELINE_ID
-      echo "test" > test.txt
-      git add test.txt
-      git commit -m "Test commit"
+      TEST_BRANCH="test-$CI_PIPELINE_ID-$(date +%s)"
+      git checkout -b $TEST_BRANCH
+      echo "test at $(date)" > test-$CI_PIPELINE_ID.txt
+      git add test-$CI_PIPELINE_ID.txt
+      git commit -m "Test commit at $(date)"
       
-      if git push origin test-$CI_PIPELINE_ID 2>&1; then
+      if git push origin $TEST_BRANCH 2>&1; then
         echo "   ✅ Can create and push branches"
         CAN_PUSH_BRANCH="YES"
       else
@@ -75,7 +76,7 @@ test_git_push_rights:
       ORIGINAL_MASTER=$(git rev-parse HEAD)
       
       # Try merge
-      if git merge test-$CI_PIPELINE_ID --no-ff -m "Test merge [skip ci]"; then
+      if git merge $TEST_BRANCH --no-ff -m "Test merge [skip ci] at $(date)"; then
         if git push origin master 2>&1; then
           echo "   ✅ Can merge to master (Maintainer/Owner rights)"
           CAN_PUSH_MASTER="YES"
@@ -94,7 +95,7 @@ test_git_push_rights:
       fi
       
       # Cleanup
-      git push --delete origin test-$CI_PIPELINE_ID 2>&1 || true
+      git push --delete origin $TEST_BRANCH 2>&1 || true
       
       # Summary
       echo ""

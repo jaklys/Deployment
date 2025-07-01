@@ -52,20 +52,31 @@ test_git_push_rights:
         CAN_PUSH_BRANCH="NO"
       fi
       
-      # Test 2: Try direct push to master
+      # Test 2: Try merge and push to master
       echo ""
-      echo "2. Testing direct push to master..."
+      echo "2. Testing merge to master..."
       git checkout master
-      git merge test-$CI_PIPELINE_ID --no-ff -m "Test merge [skip ci]"
+      git pull origin master
       
-      if git push origin master 2>/dev/null; then
-        echo "   ✅ Can push to master (Maintainer/Owner rights)"
-        CAN_PUSH_MASTER="YES"
-        # Immediately revert
-        git reset --hard HEAD~1
-        git push --force origin master 2>/dev/null
+      # Create a revert branch first (for cleanup)
+      ORIGINAL_MASTER=$(git rev-parse HEAD)
+      
+      # Try merge
+      if git merge test-$CI_PIPELINE_ID --no-ff -m "Test merge [skip ci]"; then
+        if git push origin master 2>/dev/null; then
+          echo "   ✅ Can merge to master (Maintainer/Owner rights)"
+          CAN_PUSH_MASTER="YES"
+          
+          # Create revert commit instead of force push
+          git revert HEAD --no-edit -m 1
+          git push origin master 2>/dev/null
+        else
+          echo "   ❌ Cannot push merge to master (Developer rights)"
+          CAN_PUSH_MASTER="NO"
+          git reset --hard $ORIGINAL_MASTER
+        fi
       else
-        echo "   ❌ Cannot push to master (Developer rights)"
+        echo "   ❌ Merge failed"
         CAN_PUSH_MASTER="NO"
       fi
       

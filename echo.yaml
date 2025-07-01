@@ -51,6 +51,38 @@ cascade_merge:
     # Initialize error tracking
     - SCRIPT_ERRORS=""
     - HAS_CRITICAL_ERROR=false
+
+    # Get OAuth token using system credentials
+    - |
+      echo "=== Obtaining OAuth Token ==="
+      if [ -z "$sys_access_user" ] || [ -z "$sys_access_pass" ]; then
+        echo "ERROR: sys_access_user or sys_access_pass is not set"
+        echo "Please add these to CI/CD variables"
+        SCRIPT_ERRORS="$SCRIPT_ERRORS CREDENTIALS_MISSING"
+        HAS_CRITICAL_ERROR=true
+      else
+        echo "Requesting OAuth token for user: $sys_access_user"
+        
+        # Create OAuth token via GitLab API
+        TOKEN_RESPONSE=$(curl --silent --request POST \
+          --data "grant_type=password&username=${sys_access_user}&password=${sys_access_pass}" \
+          "https://${GITLAB_URL}/oauth/token" 2>/dev/null || echo "{}")
+        
+        PROJECT_ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty' 2>/dev/null || echo "")
+        
+        if [ -z "$PROJECT_ACCESS_TOKEN" ]; then
+          echo "ERROR: Failed to obtain OAuth token"
+          echo "Response: $TOKEN_RESPONSE"
+          SCRIPT_ERRORS="$SCRIPT_ERRORS TOKEN_GENERATION_FAILED"
+          HAS_CRITICAL_ERROR=true
+        else
+          echo "✓ Successfully obtained OAuth token"
+          # Token expires in (pokud chcete zobrazit)
+          TOKEN_EXPIRES=$(echo "$TOKEN_RESPONSE" | jq -r '.expires_in // "unknown"' 2>/dev/null || echo "unknown")
+          echo "  Token expires in: $TOKEN_EXPIRES seconds"
+        fi
+      fi
+    
     
     # Clone repository
     - |

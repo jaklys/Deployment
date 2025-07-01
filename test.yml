@@ -10,10 +10,8 @@ test_git_push_rights:
     PROJECT_PATH: "your-group/your-project"  # změňte na váš projekt
   before_script:
     - yum install -y curl jq git
-    - git config --global user.name "Test Bot"
-    - git config --global user.email "test@company.com"
   script:
-    # Get OAuth token
+    # Get OAuth token and user info
     - |
       echo "=== Getting OAuth Token ==="
       TOKEN_RESPONSE=$(curl --silent --request POST \
@@ -27,7 +25,22 @@ test_git_push_rights:
         echo "Check sys_access_user and sys_access_pass variables"
         exit 1
       fi
+      
+      # Get user details for proper git config
+      echo "Getting user details..."
+      USER_INFO=$(curl --silent --header "Authorization: Bearer ${PROJECT_ACCESS_TOKEN}" \
+        "https://${GITLAB_URL}/api/v4/user")
+      
+      USER_NAME=$(echo "$USER_INFO" | jq -r '.name // .username')
+      USER_EMAIL=$(echo "$USER_INFO" | jq -r '.email')
+      
       echo "✅ Got OAuth token for user: $sys_access_user"
+      echo "   Name: $USER_NAME"
+      echo "   Email: $USER_EMAIL"
+      
+      # Configure git with actual user's identity
+      git config --global user.name "$USER_NAME"
+      git config --global user.email "$USER_EMAIL"
     
     # Clone and test
     - |

@@ -1,0 +1,90 @@
+stages:
+  - test-permissions
+
+test_git_push_rights:
+  stage: test-permissions
+  image: your-ubi8plus-image
+  variables:
+    GIT_STRATEGY: none
+    GITLAB_URL: "gitlab.com"  # změňte na vaši instanci
+    PROJECT_PATH: "your-group/your-project"  # změňte na váš projekt
+  before_script:
+    - yum install -y curl jq git
+    - git config --global user.name "Test Bot"
+    - git config --global user.email "test@company.com"
+  script:
+    # Get OAuth token
+    - |
+      echo "=== Getting OAuth Token ==="
+      TOKEN_RESPONSE=$(curl --silent --request POST \
+        --data "grant_type=password&username=${sys_access_user}&password=${sys_access_pass}" \
+        "https://${GITLAB_URL}/oauth/token")
+      
+      PROJECT_ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
+      
+      if [ -z "$PROJECT_ACCESS_TOKEN" ]; then
+        echo "❌ Failed to get token"
+        echo "Check sys_access_user and sys_access_pass variables"
+        exit 1
+      fi
+      echo "✅ Got OAuth token for user: $sys_access_user"
+    
+    # Clone and test
+    - |
+      echo ""
+      echo "=== Testing Git Permissions ==="
+      git clone "https://oauth2:${PROJECT_ACCESS_TOKEN}@${GITLAB_URL}/${PROJECT_PATH}.git" test_repo
+      cd test_repo
+      
+      # Test 1: Create and push test branch
+      echo ""
+      echo "1. Testing push to regular branch..."
+      git checkout -b test-$CI_PIPELINE_ID
+      echo "test" > test.txt
+      git add test.txt
+      git commit -m "Test commit"
+      
+      if git push origin test-$CI_PIPELINE_ID 2>/dev/null; then
+        echo "   ✅ Can create and push branches"
+        CAN_PUSH_BRANCH="YES"
+      else
+        echo "   ❌ Cannot push branches"
+        CAN_PUSH_BRANCH="NO"
+      fi
+      
+      # Test 2: Try direct push to master
+      echo ""
+      echo "2. Testing direct push to master..."
+      git checkout master
+      git merge test-$CI_PIPELINE_ID --no-ff -m "Test merge [skip ci]"
+      
+      if git push origin master 2>/dev/null; then
+        echo "   ✅ Can push to master (Maintainer/Owner rights)"
+        CAN_PUSH_MASTER="YES"
+        # Immediately revert
+        git reset --hard HEAD~1
+        git push --force origin master 2>/dev/null
+      else
+        echo "   ❌ Cannot push to master (Developer rights)"
+        CAN_PUSH_MASTER="NO"
+      fi
+      
+      # Cleanup
+      git push --delete origin test-$CI_PIPELINE_ID 2>/dev/null || true
+      
+      # Summary
+      echo ""
+      echo "========================================="
+      echo "SUMMARY FOR USER: $sys_access_user"
+      echo "========================================="
+      echo "Can push branches: $CAN_PUSH_BRANCH"
+      echo "Can push to master: $CAN_PUSH_MASTER"
+      echo ""
+      
+      if [ "$CAN_PUSH_MASTER" = "YES" ]; then
+        echo "✅ User has sufficient rights for cascade merge"
+        exit 0
+      else
+        echo "❌ User needs Maintainer or Owner role to push to protected branches"
+        exit 1
+      fi

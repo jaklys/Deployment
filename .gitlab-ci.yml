@@ -87,7 +87,7 @@ cascade_merge:
         CLONE_URL="https://oauth2:${PROJECT_ACCESS_TOKEN}@${GITLAB_URL}/${PROJECT_PATH}.git"
         echo "Cloning repository..."
         
-        if ! git clone --progress --verbose --depth=50 "$CLONE_URL" project 2>&1; then
+        if ! git clone --progress --verbose "$CLONE_URL" project 2>&1; then
           echo "ERROR: Failed to clone repository"
           echo "Check your PROJECT_ACCESS_TOKEN and PROJECT_PATH"
           SCRIPT_ERRORS="$SCRIPT_ERRORS CLONE_FAILED"
@@ -282,7 +282,7 @@ cascade_merge:
           echo "Attempting merge from $CURRENT_BRANCH to $TARGET..."
           
           # Try merge without --no-commit to get proper conflict detection
-          if git merge origin/$CURRENT_BRANCH --no-ff -m "Cascade merge from $CURRENT_BRANCH to $TARGET [skip ci] [auto-cascade] Automated by: Pipeline $CI_PIPELINE_ID Source commit: $CI_COMMIT_SHA" 2>&1; then
+          if git merge origin/$CURRENT_BRANCH --no-ff --no-edit -m "Cascade merge from $CURRENT_BRANCH to $TARGET [skip ci] [auto-cascade] Automated by: Pipeline $CI_PIPELINE_ID Source commit: $CI_COMMIT_SHA" 2>&1; then
             
             # Merge succeeded - check if there were actual changes
             MERGE_COMMIT=$(git rev-parse HEAD)

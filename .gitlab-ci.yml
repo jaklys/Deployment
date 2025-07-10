@@ -1,0 +1,484 @@
+stages:
+  - cascade-merge
+
+cascade_merge:
+  stage: cascade-merge
+  image: your-ubi8plus-image
+  rules:
+    # Spustí se po merge do release branch, ALE NE pokud to bylo z MR s labelem auto-cascade
+    - if: '$CI_COMMIT_BRANCH =~ /^release\/[A-Za-z]+\.[A-Za-z]+\.\d{4}\.\d{2}\.\d{2}$/ && $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_TITLE !~ /auto-cascade/'
+    # Skip pokud commit message obsahuje [auto-cascade] tag
+    - if: '$CI_COMMIT_BRANCH =~ /^release\/[A-Za-z]+\.[A-Za-z]+\.\d{4}\.\d{2}\.\d{2}$/ && $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_MESSAGE !~ /\[auto-cascade\]/'
+  variables:
+    GIT_STRATEGY: none
+    MAX_MERGE_TARGETS: 50
+    CREATE_MR_ON_CONFLICT: "true"
+    GITLAB_URL: "gitlab.com"  # změňte na vaši instanci
+    PROJECT_PATH: "your-group/your-project"  # změňte na váš projekt
+    GIT_TRACE: 1  # Enable Git trace
+    GIT_CURL_VERBOSE: 1  # Verbose curl output for Git
+  timeout: 3 hours
+  before_script:
+    # Extra kontrola proti zacyklení
+    - |
+      echo "=== Loop Prevention Check ==="
+      echo "Commit title: $CI_COMMIT_TITLE"
+      echo "Commit message: $CI_COMMIT_MESSAGE"
+      echo "Pipeline source: $CI_PIPELINE_SOURCE"
+      
+      # Skip if this is result of auto-cascade MR
+      if echo "$CI_COMMIT_TITLE" | grep -q "\[Auto\] Cascade merge"; then
+        echo "⚠️  This commit is from auto-cascade MR - skipping to prevent loop"
+        exit 0
+      fi
+      
+      # Skip if commit has auto-cascade marker
+      if echo "$CI_COMMIT_MESSAGE" | grep -q "\[auto-cascade\]"; then
+        echo "⚠️  This commit has auto-cascade marker - skipping"
+        exit 0
+      fi
+    # Install dependencies for UBI8Plus
+    - |
+      echo "Installing required packages..."
+      yum install -y jq curl git || {
+        echo "ERROR: Failed to install required packages"
+        exit 1
+      }
+  script:
+    # Initialize error tracking
+    - SCRIPT_ERRORS=""
+    - HAS_CRITICAL_ERROR=false
+    
+    # Get OAuth token using system credentials
+    - |
+      echo "=== Obtaining OAuth Token ==="
+      if [ -z "$sys_access_user" ] || [ -z "$sys_access_pass" ]; then
+        echo "ERROR: sys_access_user or sys_access_pass is not set"
+        echo "Please add these to CI/CD variables"
+        SCRIPT_ERRORS="$SCRIPT_ERRORS CREDENTIALS_MISSING"
+        HAS_CRITICAL_ERROR=true
+      else
+        echo "Requesting OAuth token for user: $sys_access_user"
+        
+        # Create OAuth token via GitLab API
+        TOKEN_RESPONSE=$(curl --silent --request POST \
+          --data "grant_type=password&username=${sys_access_user}&password=${sys_access_pass}" \
+          "https://${GITLAB_URL}/oauth/token" 2>/dev/null || echo "{}")
+        
+        PROJECT_ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty' 2>/dev/null || echo "")
+        
+        if [ -z "$PROJECT_ACCESS_TOKEN" ]; then
+          echo "ERROR: Failed to obtain OAuth token"
+          echo "Response: $TOKEN_RESPONSE"
+          SCRIPT_ERRORS="$SCRIPT_ERRORS TOKEN_GENERATION_FAILED"
+          HAS_CRITICAL_ERROR=true
+        else
+          echo "✓ Successfully obtained OAuth token"
+          # Token expires in (pokud chcete zobrazit)
+          TOKEN_EXPIRES=$(echo "$TOKEN_RESPONSE" | jq -r '.expires_in // "unknown"' 2>/dev/null || echo "unknown")
+          echo "  Token expires in: $TOKEN_EXPIRES seconds"
+        fi
+      fi
+    
+    # Clone repository
+    - |
+      echo "=== Repository Setup ==="
+      if [ "$HAS_CRITICAL_ERROR" = false ] && [ -n "$PROJECT_ACCESS_TOKEN" ]; then
+        CLONE_URL="https://oauth2:${PROJECT_ACCESS_TOKEN}@${GITLAB_URL}/${PROJECT_PATH}.git"
+        echo "Cloning repository..."
+        
+        if ! git clone --progress --verbose --depth=50 "$CLONE_URL" project 2>&1; then
+          echo "ERROR: Failed to clone repository"
+          echo "Check your PROJECT_ACCESS_TOKEN and PROJECT_PATH"
+          SCRIPT_ERRORS="$SCRIPT_ERRORS CLONE_FAILED"
+          HAS_CRITICAL_ERROR=true
+        else
+          cd project
+          echo "Fetching all branches..."
+          git fetch --all --prune --progress --verbose || {
+            echo "WARNING: Fetch all failed"
+            SCRIPT_ERRORS="$SCRIPT_ERRORS FETCH_WARNING"
+          }
+          
+          # Make sure we have the latest current branch
+          echo "Ensuring current branch is up to date..."
+          git fetch origin $CI_COMMIT_BRANCH:refs/remotes/origin/$CI_COMMIT_BRANCH --force || {
+            echo "WARNING: Could not fetch current branch"
+          }
+        fi
+      fi
+    
+    # Continue only if no critical errors
+    - |
+      if [ "$HAS_CRITICAL_ERROR" = true ]; then
+        echo "Critical error encountered, cannot continue"
+      else
+        # Log merge info
+        echo "=== Merge Information ==="
+        echo "Current branch: $CI_COMMIT_BRANCH"
+        echo "Commit SHA: $CI_COMMIT_SHA"
+        echo "Commit author: $CI_COMMIT_AUTHOR"
+        
+        # Try to detect if user branch was deleted
+        if echo "$CI_COMMIT_TITLE" | grep -q "^Merge branch"; then
+          echo "This appears to be a merge commit"
+          SOURCE_BRANCH=$(echo "$CI_COMMIT_TITLE" | sed -n "s/^Merge branch '\([^']*\)'.*/\1/p")
+          if [ -n "$SOURCE_BRANCH" ]; then
+            echo "Detected source branch: $SOURCE_BRANCH"
+            if ! git rev-parse --verify "origin/$SOURCE_BRANCH" >/dev/null 2>&1; then
+              echo "Source branch '$SOURCE_BRANCH' was deleted after merge (this is normal)"
+            fi
+          fi
+        fi
+      fi
+    
+    # Extract parts from the current release branch name
+    - |
+      if [ "$HAS_CRITICAL_ERROR" = false ]; then
+        CURRENT_BRANCH="${CI_COMMIT_BRANCH}"
+        VERSION="${CURRENT_BRANCH##release/}"
+        TYPE_AND_YEAR="${VERSION%.*.*}"
+        SUFFIX="${VERSION##$TYPE_AND_YEAR.}"
+        PREFIX="release/$TYPE_AND_YEAR"
+        
+        echo ""
+        echo "Branch parsing:"
+        echo "  Version: $VERSION"
+        echo "  Type.Project.Year: $TYPE_AND_YEAR"
+        echo "  Month.Day: $SUFFIX"
+        echo "  Looking for branches with prefix: $PREFIX"
+      fi
+    
+    # Get all matching branches
+    - |
+      TARGET_BRANCHES=""
+      BRANCH_COUNT=0
+      
+      if [ "$HAS_CRITICAL_ERROR" = false ]; then
+        echo ""
+        echo "=== Finding Target Branches ==="
+        ALL_BRANCHES=$(git ls-remote --heads origin 2>/dev/null | 
+                       grep -E 'refs/heads/release/' | 
+                       sed 's|.*refs/heads/||' | 
+                       grep "^$PREFIX\\." || true)
+        
+        if [ -z "$ALL_BRANCHES" ]; then
+          echo "No other branches found with prefix $PREFIX"
+        else
+          echo "Found branches with same prefix:"
+          echo "$ALL_BRANCHES" | sed 's/^/  - /'
+        fi
+        
+        # Collect newer release branches
+        set +e  # Don't exit on error in loop
+        for BRANCH in $ALL_BRANCHES; do
+          OTHER_SUFFIX="${BRANCH##$PREFIX.}"
+          if [ "$OTHER_SUFFIX" \> "$SUFFIX" ]; then
+            TARGET_BRANCHES="$TARGET_BRANCHES $BRANCH"
+            BRANCH_COUNT=$((BRANCH_COUNT + 1))
+            echo "  ✓ $BRANCH (newer: $OTHER_SUFFIX > $SUFFIX)"
+          else
+            echo "  ✗ $BRANCH (older or same: $OTHER_SUFFIX <= $SUFFIX)"
+          fi
+        done
+        set -e
+        
+        # Add master only
+        echo ""
+        echo "Checking for master branch..."
+        # After fetch --all, we should have all refs, so check locally first
+        if git show-ref --verify refs/remotes/origin/master >/dev/null 2>&1; then
+          TARGET_BRANCHES="$TARGET_BRANCHES master"
+          BRANCH_COUNT=$((BRANCH_COUNT + 1))
+          echo "  ✓ Added master branch"
+        elif git ls-remote --heads origin 2>&1 | grep -q 'refs/heads/master'; then
+          # Fallback to remote check
+          TARGET_BRANCHES="$TARGET_BRANCHES master"
+          BRANCH_COUNT=$((BRANCH_COUNT + 1))
+          echo "  ✓ Added master branch (remote check)"
+        else
+          echo "  ℹ️  No master branch found"
+          # Debug: show what we do have
+          echo "  Debug: Branches containing 'master' or 'main':"
+          git branch -r | grep -E "(master|main)" || echo "    None found"
+        fi
+      fi
+    
+    # Display cascade plan
+    - |
+      if [ "$HAS_CRITICAL_ERROR" = false ]; then
+        echo ""
+        echo "=== Cascade Plan ==="
+        echo "From: $CURRENT_BRANCH"
+        echo "Targets: $BRANCH_COUNT branches"
+        if [ $BRANCH_COUNT -gt 0 ]; then
+          echo "Will cascade to:"
+          for TARGET in $TARGET_BRANCHES; do
+            echo "  → $TARGET"
+          done
+        else
+          echo "No target branches found - nothing to cascade"
+        fi
+        
+        # Safety check
+        if [ $BRANCH_COUNT -gt $MAX_MERGE_TARGETS ]; then
+          echo "ERROR: Found $BRANCH_COUNT branches, exceeding MAX_MERGE_TARGETS ($MAX_MERGE_TARGETS)"
+          SCRIPT_ERRORS="$SCRIPT_ERRORS TOO_MANY_TARGETS"
+          HAS_CRITICAL_ERROR=true
+        fi
+      fi
+    
+    # Initialize tracking variables
+    - FAILED_MERGES=""
+    - SUCCESSFUL_MERGES=""
+    - CONFLICT_BRANCHES=""
+    - CREATED_MRS=""
+    - MERGE_ATTEMPTS=0
+    - START_TIME=$(date +%s)
+    
+    # Process each target branch
+    - |
+      if [ "$HAS_CRITICAL_ERROR" = false ] && [ $BRANCH_COUNT -gt 0 ]; then
+        echo ""
+        echo "=== Starting Cascade Merge Process ==="
+        
+        for TARGET in $TARGET_BRANCHES; do
+          MERGE_ATTEMPTS=$((MERGE_ATTEMPTS + 1))
+          echo ""
+          echo "========================================="
+          echo "[$MERGE_ATTEMPTS/$BRANCH_COUNT] Target: $TARGET"
+          echo "========================================="
+          
+          MERGE_ERROR=false
+          
+          # Clean any previous state
+          git reset --hard HEAD 2>/dev/null || MERGE_ERROR=true
+          git clean -fdx 2>/dev/null || true
+          git checkout -f $CURRENT_BRANCH 2>/dev/null || MERGE_ERROR=true
+          
+          if [ "$MERGE_ERROR" = true ]; then
+            echo "✗ ERROR: Failed to prepare workspace"
+            FAILED_MERGES="$FAILED_MERGES $TARGET"
+            SCRIPT_ERRORS="$SCRIPT_ERRORS WORKSPACE_PREP_FAILED"
+            continue
+          fi
+          
+          # Fetch latest state of target
+          echo "Fetching latest state of $TARGET..."
+          if ! git fetch --progress --verbose origin $TARGET:refs/remotes/origin/$TARGET 2>&1; then
+            echo "✗ WARNING: Failed to fetch $TARGET, using cached version"
+            SCRIPT_ERRORS="$SCRIPT_ERRORS FETCH_WARNING"
+          fi
+          
+          # Checkout target branch
+          echo "Checking out $TARGET..."
+          if ! git checkout -B $TARGET origin/$TARGET 2>&1; then
+            echo "✗ ERROR: Failed to checkout $TARGET"
+            FAILED_MERGES="$FAILED_MERGES $TARGET"
+            continue
+          fi
+          
+          echo "Current HEAD: $(git rev-parse HEAD)"
+          echo "Attempting merge from $CURRENT_BRANCH to $TARGET..."
+          
+          # Try merge without --no-commit to get proper conflict detection
+          if git merge origin/$CURRENT_BRANCH --no-ff -m "Cascade merge from $CURRENT_BRANCH to $TARGET [skip ci] [auto-cascade] Automated by: Pipeline $CI_PIPELINE_ID Source commit: $CI_COMMIT_SHA" 2>&1; then
+            
+            # Merge succeeded - check if there were actual changes
+            MERGE_COMMIT=$(git rev-parse HEAD)
+            PARENT_COMMIT=$(git rev-parse HEAD~1)
+            
+            if git diff --quiet $PARENT_COMMIT $MERGE_COMMIT; then
+              echo "ℹ️  No changes to merge (already up-to-date)"
+              git reset --hard HEAD~1  # Undo the merge
+              continue
+            fi
+            
+            # Push
+            echo "Pushing to $TARGET..."
+            if git push origin $TARGET 2>&1; then
+              SUCCESSFUL_MERGES="$SUCCESSFUL_MERGES $TARGET"
+              echo "✓ SUCCESS: Merged and pushed to $TARGET"
+            else
+              FAILED_MERGES="$FAILED_MERGES $TARGET"
+              SCRIPT_ERRORS="$SCRIPT_ERRORS PUSH_FAILED"
+              echo "✗ ERROR: Failed to push to $TARGET"
+            fi
+          else
+            # Merge conflict - SIMPLIFIED LOGIC
+            echo "⚠️  CONFLICT: Cannot automatically merge to $TARGET"
+            git merge --abort 2>/dev/null || true
+            CONFLICT_BRANCHES="$CONFLICT_BRANCHES $TARGET"
+            
+            # Create MR for manual resolution
+            if [[ "$CREATE_MR_ON_CONFLICT" == "true" ]]; then
+              echo "Creating merge request for manual conflict resolution..."
+              
+              # Simple branch name
+              TIMESTAMP=$(date +%s)
+              MERGE_BRANCH="cascade/${CURRENT_BRANCH//\//-}-to-${TARGET//\//-}-${TIMESTAMP}"
+              
+              # Make sure we have the latest commits from source branch
+              echo "Ensuring we have latest source branch..."
+              if ! git fetch origin $CI_COMMIT_BRANCH:refs/remotes/origin/$CI_COMMIT_BRANCH --force 2>&1; then
+                echo "WARNING: Could not fetch latest $CI_COMMIT_BRANCH"
+              fi
+              
+              # Create branch from the commit SHA instead of branch name
+              CURRENT_SHA=$(git rev-parse origin/$CI_COMMIT_BRANCH)
+              echo "Creating branch from commit: $CURRENT_SHA"
+              
+              if git checkout -b $MERGE_BRANCH $CURRENT_SHA 2>&1; then
+                # Push the branch
+                if git push origin $MERGE_BRANCH 2>&1; then
+                  # Create MR via API
+                  echo "Creating merge request..."
+                  
+                  # Build MR payload using jq for proper JSON escaping
+                  MR_DESCRIPTION="## Automated Cascade Merge This MR was automatically created because conflicts were detected during cascade merge.
+                  ### Details 
+                  - **Source**: \`$CURRENT_BRANCH\`
+                  - **Target**: \`$TARGET\`
+                  - **Pipeline**: [\`$CI_PIPELINE_ID\`]($CI_PIPELINE_URL)
+                  ### ⚠️ Important
+                  This MR has the \`auto-cascade\` label to prevent triggering another cascade when merged.
+                  ### Next Step 1. The developer who created the original branch should:
+                  - Checkout this branch locally
+                  - Merge \`$TARGET\` into it and resolve conflicts
+                  - Push changes
+                  - Merge this MR"
+                  
+                  MR_PAYLOAD=$(jq -n \
+                    --arg source "$MERGE_BRANCH" \
+                    --arg target "$TARGET" \
+                    --arg title "[Auto] Cascade merge from $CURRENT_BRANCH to $TARGET" \
+                    --arg desc "$MR_DESCRIPTION" \
+                    '{
+                      source_branch: $source,
+                      target_branch: $target,
+                      title: $title,
+                      description: $desc,
+                      remove_source_branch: true,
+                      labels: ["auto-cascade", "merge-conflict"]
+                    }')
+                  
+                  MR_RESPONSE=$(curl --silent --request POST \
+                    --header "PRIVATE-TOKEN: ${PROJECT_ACCESS_TOKEN}" \
+                    --header "Content-Type: application/json" \
+                    --data "$MR_PAYLOAD" \
+                    "https://${GITLAB_URL}/api/v4/projects/$CI_PROJECT_ID/merge_requests" 2>/dev/null || echo "{}")
+                  
+                  MR_IID=$(echo "$MR_RESPONSE" | jq -r '.iid // empty' 2>/dev/null || echo "")
+                  MR_URL=$(echo "$MR_RESPONSE" | jq -r '.web_url // empty' 2>/dev/null || echo "")
+                  
+                  if [ -n "$MR_IID" ]; then
+                    CREATED_MRS="$CREATED_MRS !$MR_IID"
+                    echo "✓ Created MR !$MR_IID for conflict resolution"
+                    echo "  URL: $MR_URL"
+                  else
+                    echo "✗ WARNING: Failed to create MR via API"
+                    SCRIPT_ERRORS="$SCRIPT_ERRORS MR_CREATE_FAILED"
+                  fi
+                else
+                  echo "✗ WARNING: Failed to push branch for MR"
+                  SCRIPT_ERRORS="$SCRIPT_ERRORS MR_PUSH_FAILED"
+                fi
+              else
+                echo "✗ WARNING: Failed to create branch for MR"
+                SCRIPT_ERRORS="$SCRIPT_ERRORS MR_BRANCH_FAILED"
+              fi
+            fi
+          fi
+        done
+      fi
+    
+    # Final summary and exit code determination
+    - |
+      TOTAL_TIME=$(($(date +%s) - START_TIME))
+      FINAL_EXIT_CODE=0
+      
+      echo ""
+      echo "========================================="
+      echo "CASCADE MERGE COMPLETED"
+      echo "========================================="
+      echo "Execution time: ${TOTAL_TIME} seconds"
+      echo ""
+      
+      # Calculate counts
+      SUCCESS_COUNT=0
+      FAIL_COUNT=0
+      CONFLICT_COUNT=0
+      MR_COUNT=0
+      
+      [ -n "$SUCCESSFUL_MERGES" ] && SUCCESS_COUNT=$(echo $SUCCESSFUL_MERGES | wc -w | xargs)
+      [ -n "$FAILED_MERGES" ] && FAIL_COUNT=$(echo $FAILED_MERGES | wc -w | xargs)
+      [ -n "$CONFLICT_BRANCHES" ] && CONFLICT_COUNT=$(echo $CONFLICT_BRANCHES | wc -w | xargs)
+      [ -n "$CREATED_MRS" ] && MR_COUNT=$(echo $CREATED_MRS | wc -w | xargs)
+      
+      echo "Summary:"
+      echo "  Total targets: $BRANCH_COUNT"
+      echo "  Successful: $SUCCESS_COUNT"
+      echo "  Failed: $FAIL_COUNT"
+      echo "  Conflicts: $CONFLICT_COUNT"
+      echo "  MRs created: $MR_COUNT"
+      
+      if [ -n "$SCRIPT_ERRORS" ]; then
+        echo ""
+        echo "Warnings/Errors encountered:"
+        echo "  $SCRIPT_ERRORS"
+      fi
+      
+      if [ -n "$SUCCESSFUL_MERGES" ]; then
+        echo ""
+        echo "✓ Successfully cascaded to:"
+        for BRANCH in $SUCCESSFUL_MERGES; do
+          echo "  - $BRANCH"
+        done
+      fi
+      
+      if [ -n "$CREATED_MRS" ]; then
+        echo ""
+        echo "📋 Created MRs for conflict resolution:"
+        for MR in $CREATED_MRS; do
+          echo "  - $MR (has 'auto-cascade' label)"
+        done
+      fi
+      
+      if [ -n "$CONFLICT_BRANCHES" ]; then
+        echo ""
+        echo "⚠️  Branches with conflicts (MRs created):"
+        for BRANCH in $CONFLICT_BRANCHES; do
+          echo "  - $BRANCH"
+        done
+      fi
+      
+      # Determine final status
+      if [ "$HAS_CRITICAL_ERROR" = true ]; then
+        echo ""
+        echo "❌ CRITICAL ERROR: Pipeline failed due to setup/configuration issues"
+        FINAL_EXIT_CODE=1
+      elif [ -n "$FAILED_MERGES" ]; then
+        echo ""
+        echo "✗ Failed operations:"
+        for BRANCH in $FAILED_MERGES; do
+          echo "  - $BRANCH"
+        done
+        echo ""
+        echo "❌ ERROR: Some cascade merges failed!"
+        FINAL_EXIT_CODE=1
+      elif [ $BRANCH_COUNT -eq 0 ]; then
+        echo ""
+        echo "ℹ️  No branches to cascade - this is normal if branch is up-to-date"
+        FINAL_EXIT_CODE=0
+      elif [ $SUCCESS_COUNT -eq 0 ] && [ $CONFLICT_COUNT -gt 0 ]; then
+        echo ""
+        echo "⚠️  All target branches have conflicts - manual resolution required"
+        echo "Check created MRs and resolve conflicts"
+        FINAL_EXIT_CODE=0  # Conflicts are not failures
+      else
+        echo ""
+        echo "✅ Cascade merge completed successfully!"
+        FINAL_EXIT_CODE=0
+      fi
+      
+      exit $FINAL_EXIT_CODE

@@ -5,10 +5,10 @@ cascade_merge:
   stage: cascade-merge
   image: your-ubi8plus-image
   rules:
-    # Spustí se po merge do release branch, ALE NE pokud to bylo z MR s labelem auto-cascade
-    - if: '$CI_COMMIT_BRANCH =~ /^release\/[A-Za-z]+\.[A-Za-z]+\.\d{4}\.\d{2}\.\d{2}$/ && $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_TITLE !~ /auto-cascade/'
-    # Skip pokud commit message obsahuje [auto-cascade] tag
-    - if: '$CI_COMMIT_BRANCH =~ /^release\/[A-Za-z]+\.[A-Za-z]+\.\d{4}\.\d{2}\.\d{2}$/ && $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_MESSAGE !~ /\[auto-cascade\]/'
+   rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^release\/[A-Za-z]+\.[A-Za-z]+\.\d{4}\.\d{2}\.\d{2}$/ && ($CI_COMMIT_TITLE =~ /auto-cascade/ || $CI_COMMIT_MESSAGE =~ /\[auto-cascade\]/)'
+      when: never
+    - if: '$CI_COMMIT_BRANCH =~ /^release\/[A-Za-z]+\.[A-Za-z]+\.\d{4}\.\d{2}\.\d{2}$/ && $CI_PIPELINE_SOURCE == "push"'
   variables:
     GIT_STRATEGY: none
     MAX_MERGE_TARGETS: 50
@@ -336,17 +336,17 @@ cascade_merge:
                   
                   # Build MR payload using jq for proper JSON escaping
                   MR_DESCRIPTION="## Automated Cascade Merge This MR was automatically created because conflicts were detected during cascade merge.
-                  ### Details 
-                  - **Source**: \`$CURRENT_BRANCH\`
-                  - **Target**: \`$TARGET\`
-                  - **Pipeline**: [\`$CI_PIPELINE_ID\`]($CI_PIPELINE_URL)
-                  ### ⚠️ Important
-                  This MR has the \`auto-cascade\` label to prevent triggering another cascade when merged.
-                  ### Next Step 1. The developer who created the original branch should:
-                  - Checkout this branch locally
-                  - Merge \`$TARGET\` into it and resolve conflicts
-                  - Push changes
-                  - Merge this MR"
+      ### Details
+      - **Source**: \`$CURRENT_BRANCH\`
+      - **Target**: \`$TARGET\`
+      - **Pipeline**: [\`$CI_PIPELINE_ID\`]($CI_PIPELINE_URL)
+      ### ⚠️ Important
+      This MR has the \`auto-cascade\` label to prevent triggering another cascade when merged.
+      ### Next Step 1. The developer who created the original branch should:
+      - Checkout this branch locally
+      - Merge \`$TARGET\` into it and resolve conflicts
+      - Push changes
+      - Merge this MR"
                   
                   MR_PAYLOAD=$(jq -n \
                     --arg source "$MERGE_BRANCH" \

@@ -1,0 +1,84 @@
+Zde jsou jen dílčí změny:
+1. Získání původního autora a jeho GitLab ID:
+bash# Za řádek "echo "Commit author: $CI_COMMIT_AUTHOR"" přidejte:
+
+# Get the actual user who triggered this cascade
+ORIGINAL_AUTHOR_EMAIL=$(git log -1 --pretty=format:'%ae' $CI_COMMIT_SHA)
+ORIGINAL_AUTHOR_NAME=$(git log -1 --pretty=format:'%an' $CI_COMMIT_SHA)
+echo "Original author: $ORIGINAL_AUTHOR_NAME <$ORIGINAL_AUTHOR_EMAIL>"
+
+# Try to find GitLab user ID for the author
+AUTHOR_USER_ID=""
+if [ -n "$PROJECT_ACCESS_TOKEN" ]; then
+  echo "Looking up GitLab user ID for assignee..."
+  USER_SEARCH=$(curl --silent --header "Authorization: Bearer ${PROJECT_ACCESS_TOKEN}" \
+    "https://${GITLAB_URL}/api/v4/users?search=${ORIGINAL_AUTHOR_EMAIL}" 2>/dev/null || echo "[]")
+  
+  AUTHOR_USER_ID=$(echo "$USER_SEARCH" | jq -r '.[0].id // empty' 2>/dev/null || echo "")
+  
+  if [ -n "$AUTHOR_USER_ID" ]; then
+    echo "Found GitLab user ID: $AUTHOR_USER_ID"
+  else
+    echo "Could not find GitLab user ID for $ORIGINAL_AUTHOR_EMAIL"
+  fi
+fi
+2. Přidání proměnné pro ukládání MR detailů:
+bash# K ostatním tracking variables přidejte:
+- MR_DETAILS=""  # Store MR details for final summary
+3. V části kde vytváříte MR_PAYLOAD, přidejte podmínku pro assignee:
+bash# Nahraďte celou část MR_PAYLOAD= za:
+if [ -n "$AUTHOR_USER_ID" ]; then
+  # S assignee
+  MR_PAYLOAD=$(jq -n \
+    --arg source "$MERGE_BRANCH" \
+    --arg target "$TARGET" \
+    --arg title "[Auto] Cascade merge from $CURRENT_BRANCH to $TARGET" \
+    --arg desc "$MR_DESCRIPTION" \
+    --arg assignee "$AUTHOR_USER_ID" \
+    '{
+      source_branch: $source,
+      target_branch: $target,
+      title: $title,
+      description: $desc,
+      remove_source_branch: true,
+      labels: ["auto-cascade", "merge-conflict"],
+      assignee_id: ($assignee | tonumber)
+    }')
+else
+  # Bez assignee (původní kód)
+  MR_PAYLOAD=$(jq -n \
+    --arg source "$MERGE_BRANCH" \
+    --arg target "$TARGET" \
+    --arg title "[Auto] Cascade merge from $CURRENT_BRANCH to $TARGET" \
+    --arg desc "$MR_DESCRIPTION" \
+    '{
+      source_branch: $source,
+      target_branch: $target,
+      title: $title,
+      description: $desc,
+      remove_source_branch: true,
+      labels: ["auto-cascade", "merge-conflict"]
+    }')
+fi
+4. Při úspěšném vytvoření MR přidejte ukládání detailů:
+bash# Za řádek "echo "  URL: $MR_URL"" přidejte:
+
+# Store details for final summary
+MR_DETAILS="${MR_DETAILS}!${MR_IID} - ${TARGET} - ${MR_URL}\n"
+
+# If we have author, show assignment
+if [ -n "$AUTHOR_USER_ID" ]; then
+  echo "  Assigned to: $ORIGINAL_AUTHOR_NAME"
+fi
+5. Nahraďte celou sekci výpisu MR na konci:
+bashif [ -n "$CREATED_MRS" ]; then
+  echo ""
+  echo "📋 Created MRs for conflict resolution:"
+  echo "These MRs have been assigned to: ${ORIGINAL_AUTHOR_NAME:-Unknown}"
+  echo ""
+  echo -e "$MR_DETAILS" | while IFS= read -r line; do
+    [ -n "$line" ] && echo "  $line"
+  done
+  echo ""
+  echo "The original author should resolve conflicts in these MRs."
+fi

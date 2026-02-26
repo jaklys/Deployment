@@ -1,0 +1,3 @@
+url -v -u username:password \
+  --upload-file dummy.jar \
+  "https://your-nexus/repository/maven-releases/com/test/access-test/1.0.0/access-test-1.0.0.jar"

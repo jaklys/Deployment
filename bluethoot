@@ -33,3 +33,10 @@ python -c "import socket; s = socket.socket(socket.AF_BLUETOOTH, socket.BTPROTO_
 
 # 12. Audio vystupy (pro fallback plan)
 powershell -c "Get-WmiObject Win32_SoundDevice | Select Name, Status"
+
+
+[System.IO.Ports.SerialPort]::GetPortNames()
+
+Get-WmiObject Win32_PnPEntity | Where-Object {$_.Name -like '*COM*' -and $_.Name -like '*Bluetooth*'} | Select Name
+
+getmac /v | findstr /i "bluetooth"

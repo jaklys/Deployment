@@ -1,0 +1,35 @@
+# 1. Vsechny COM porty (pyserial)
+python -c "import serial.tools.list_ports; [print(p) for p in serial.tools.list_ports.comports()]"
+
+# 2. Pokud pyserial neni - zakladni test
+python -c "import serial; print('pyserial OK')"
+
+# 3. Pokud pyserial vubec neni - COM porty pres PowerShell
+[System.IO.Ports.SerialPort]::GetPortNames()
+
+# 4. Detailni info o BT zarizenich
+Get-PnpDevice -Class Bluetooth | Where-Object {$_.FriendlyName -like '*DESKTOP*' -or $_.FriendlyName -like '*9A60*'} | Format-Table Name, Status, InstanceId
+
+# 5. Vsechny BT COM porty v registru
+Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Enum\BTHENUM\*\*" -ErrorAction SilentlyContinue | Where-Object {$_.FriendlyName -like '*Serial*' -or $_.FriendlyName -like '*COM*'} | Select FriendlyName
+
+# 6. MAC adresa Barclays terminalu (budes potrebovat)
+Get-NetAdapter -Name "*Bluetooth*" | Select MacAddress
+
+# 7. Pokud predchozi nefunguje - alternativa
+getmac /v | findstr /i "bluetooth"
+
+# 8. Python verze na terminalu
+python --version
+
+# 9. Pip dostupnost
+pip --version
+
+# 10. Test jestli pip muze instalovat
+pip install pyserial --dry-run
+
+# 11. RFCOMM test (pro jistotu)
+python -c "import socket; s = socket.socket(socket.AF_BLUETOOTH, socket.BTPROTO_RFCOMM); print('RFCOMM OK'); s.close()"
+
+# 12. Audio vystupy (pro fallback plan)
+powershell -c "Get-WmiObject Win32_SoundDevice | Select Name, Status"

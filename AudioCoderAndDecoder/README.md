@@ -12,34 +12,66 @@ the original files.
 
 ## Quick Start
 
-### Sender (air-gapped PC - zero dependencies)
+### 1. Calibrate (first time + when changing hardware)
+
+Run calibration to find the best profile for your cable/sound cards:
+
+**Sender (air-gapped PC):**
 ```bash
-git clone <repo-url>
-cd AudioCoderAndDecoder
-
-# Encode a folder to WAV and play it
-python -m encoder.encoder --input myproject/ --output signal.wav --play
-
-# Or just generate WAV (play manually later)
-python -m encoder.encoder --input myfile.zip --output signal.wav --profile fast
+python -m encoder.calibration --output calibration.wav --play
 ```
+Generates a 3.2s WAV with test data in all 4 profiles. Play it over the cable.
 
-### Receiver (personal PC)
+**Receiver (personal PC):**
 ```bash
-cd AudioCoderAndDecoder
 pip install -r decoder/requirements.txt
 
-# Decode from WAV file (for testing)
-python -m decoder.decoder --input signal.wav --output ./received/
+# Live capture (play calibration.wav on sender while this runs)
+python -m decoder.calibration --device 1 --duration 10
 
+# Or from a WAV recording
+python -m decoder.calibration --input recording.wav
+```
+
+Output shows per-profile results and recommends the fastest reliable profile:
+```
+--- Per-Profile Results ---
+
+  Profile       Frames   FEC corr   Max/CW   Payload    Status
+  --------------------------------------------------------------
+  [+] safe        8/    8          3        2         0      GOOD
+  [+] standard    8/    8         12        5         0      GOOD
+  [~] fast        8/    8         48       14         0     TIGHT
+  [X] turbo       6/    8        102       16         2      FAIL
+
+--- Recommendation ---
+  Profile:  standard
+```
+
+### 2. Send files
+
+**Sender (air-gapped PC - zero dependencies):**
+```bash
+# Encode a folder to WAV and play it
+python -m encoder.encoder --input myproject/ --output signal.wav --profile standard --play
+
+# Or just generate WAV (play manually later)
+python -m encoder.encoder --input myfile.zip --output signal.wav --profile standard
+```
+
+**Receiver (personal PC):**
+```bash
 # Decode from live audio capture
-python -m decoder.decoder --duration 300 --output ./received/ --profile standard
+python -m decoder.decoder --device 1 --duration 300 --output ./received/ --profile standard
 
-# List audio devices
+# Or decode from WAV file
+python -m decoder.decoder --input signal.wav --output ./received/
+```
+
+### Listing audio devices
+```bash
 python -m decoder.decoder --list-devices
-
-# Use specific audio device
-python -m decoder.decoder --device 2 --duration 120 --output ./received/
+python -m decoder.calibration --list-devices
 ```
 
 ## Hardware Setup
@@ -49,7 +81,7 @@ python -m decoder.decoder --device 2 --duration 120 --output ./received/
 3. Set sender output volume to 50-70%
 4. Disable AGC on receiver (see below)
 
-## Disabling AGC (Windows - Important!)
+## Disabling AGC (Windows)
 
 Windows may auto-adjust input gain (AGC), which corrupts the OFDM signal.
 The modem has pilot-based AGC compensation, but disabling AGC gives better results.
@@ -63,12 +95,15 @@ The modem has pilot-based AGC compensation, but disabling AGC gives better resul
 
 ## Profiles
 
-| Profile  | Modulation | Throughput | 1 MB   | 5 MB    | Use When                  |
-|----------|-----------|-----------|--------|---------|---------------------------|
+| Profile  | Modulation | Throughput | 1 MB   | 5 MB    | Use When                     |
+|----------|-----------|-----------|--------|---------|------------------------------|
 | safe     | BPSK      | ~1.9 kB/s | ~9 min | ~45 min | Noisy connection, first test |
-| standard | QPSK      | ~3.8 kB/s | ~4.5 min | ~22 min | Default, recommended     |
-| fast     | 16-QAM    | ~7.5 kB/s | ~2.3 min | ~11 min | Good cable, AGC disabled |
-| turbo    | 64-QAM    | ~11 kB/s  | ~1.5 min | ~7.5 min | Excellent SNR only      |
+| standard | QPSK      | ~3.8 kB/s | ~4.5 min | ~22 min | Default, recommended      |
+| fast     | 16-QAM    | ~7.5 kB/s | ~2.3 min | ~11 min | Good cable, AGC disabled  |
+| turbo    | 64-QAM    | ~11 kB/s  | ~1.5 min | ~7.5 min | Excellent SNR only        |
+
+Use `python -m encoder.calibration` + `python -m decoder.calibration` to find out which
+profile works for your setup.
 
 ## Testing
 
@@ -89,7 +124,7 @@ Interactive test that checks audio levels, measures BER, and recommends the opti
 - **Sample rate:** 44100 Hz
 - **FFT size:** 1024 (43 Hz frequency resolution)
 - **Cyclic prefix:** 128 samples (1/8 of FFT)
-- **Usable band:** 300-20000 Hz (448 data carriers + 10 pilots)
+- **Usable band:** 300-19600 Hz (439 data carriers + 10 pilots)
 - **FEC:** Reed-Solomon RS(255,223) - corrects up to 16 byte errors per codeword
 - **Interleaving:** Block interleaver (depth 8) spreads burst errors across codewords
 - **Preamble:** Schmidl-Cox (autocorrelation-based detection)
@@ -99,23 +134,25 @@ Interactive test that checks audio levels, measures BER, and recommends the opti
 
 ```
 AudioCoderAndDecoder/
-  encoder/         # ZERO external dependencies - stdlib only
-    encoder.py     # Main CLI entry point
-    protocol.py    # Shared constants and profiles
-    fec.py         # Reed-Solomon GF(256) codec
-    ofdm.py        # Pure Python FFT + OFDM modulation
-    audio_out.py   # WAV writing + winsound playback
+  encoder/              # ZERO external dependencies - stdlib only
+    encoder.py          # Main CLI: file/folder -> WAV
+    calibration.py      # Calibration WAV generator
+    protocol.py         # Shared constants and profiles
+    fec.py              # Reed-Solomon GF(256) codec
+    ofdm.py             # Pure Python FFT + OFDM modulation
+    audio_out.py        # WAV writing + winsound playback
 
-  decoder/         # Requires: numpy, scipy, sounddevice
-    decoder.py     # Main CLI entry point
-    protocol.py    # Copy of encoder/protocol.py
-    fec_fast.py    # Reed-Solomon decoder
-    ofdm_fast.py   # OFDM demodulation (numpy/scipy)
-    audio_in.py    # Audio capture + WAV reading
+  decoder/              # Requires: numpy, scipy, sounddevice
+    decoder.py          # Main CLI: audio -> file/folder
+    calibration.py      # Calibration signal analyzer
+    protocol.py         # Copy of encoder/protocol.py
+    fec_fast.py         # Reed-Solomon decoder
+    ofdm_fast.py        # OFDM demodulation (numpy/scipy)
+    audio_in.py         # Audio capture + WAV reading
 
   tests/
-    test_loopback.py   # Local pipeline test
-    test_cable.py      # Physical cable test
+    test_loopback.py    # Local pipeline test
+    test_cable.py       # Physical cable test
 ```
 
 ## Troubleshooting
@@ -123,4 +160,5 @@ AudioCoderAndDecoder/
 - **Preamble not detected:** Increase output volume, check cable connection
 - **High error rate:** Use a lower profile (standard -> safe), disable AGC
 - **Decode fails but preamble found:** Check that sender and receiver use the same profile
+- **Calibration shows FAIL on all profiles:** Check cable, volume, and audio device selection
 - **WAV generation slow:** Expected for large files (pure Python FFT). ~90s for 1 MB at QPSK

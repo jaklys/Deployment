@@ -143,10 +143,13 @@ def demodulate_frames(signal, preamble_start, H, data_start, profile_name):
 
     print(f"  Decoding metadata ({meta_sym_count} BPSK symbols)...")
 
+    meta_phase_tracker = ofdm_fast.PhaseTracker()
     meta_bits = []
     for sym_idx in range(min(meta_sym_count, max_symbols)):
         sym_start = data_start + sym_idx * sym_len
-        bits = ofdm_fast.demodulate_data_symbol(signal, sym_start, H, "safe", sym_idx)
+        bits = ofdm_fast.demodulate_data_symbol(
+            signal, sym_start, H, "safe", sym_idx,
+            phase_tracker=meta_phase_tracker)
         meta_bits.extend(bits)
 
     # RS-decode metadata codeword
@@ -204,6 +207,8 @@ def demodulate_frames(signal, preamble_start, H, data_start, profile_name):
     frames_ok = 0
     frames_bad = 0
     sym_idx_global = data_sym_start_idx
+    data_pilot_idx = 0  # pilot index matches encoder (starts at 0 for data)
+    data_phase_tracker = ofdm_fast.PhaseTracker()
     frames_decoded = 0
 
     for batch_idx in range(num_batches):
@@ -214,9 +219,11 @@ def demodulate_frames(signal, preamble_start, H, data_start, profile_name):
                 break
             sym_start = data_start + sym_idx_global * sym_len
             bits = ofdm_fast.demodulate_data_symbol(
-                signal, sym_start, H, profile_name, sym_idx_global)
+                signal, sym_start, H, profile_name, data_pilot_idx,
+                phase_tracker=data_phase_tracker)
             batch_bit_list.extend(bits)
             sym_idx_global += 1
+            data_pilot_idx += 1
 
         if len(batch_bit_list) < batch_bits:
             batch_bit_list.extend([0] * (batch_bits - len(batch_bit_list)))
@@ -230,17 +237,23 @@ def demodulate_frames(signal, preamble_start, H, data_start, profile_name):
         # RS decode each codeword and extract frames
         frames_in_batch = min(depth, expected_data_frames - batch_idx * depth)
         for cw_idx in range(frames_in_batch):
+            rs_ok = False
             try:
                 msg_bytes, nerr = fec_fast.rs_decode(codewords[cw_idx])
                 fec_corrected += nerr
+                rs_ok = True
             except ValueError:
                 msg_bytes = codewords[cw_idx][:protocol.RS_K]
 
-            frame = decode_frame(msg_bytes)
-            if frame and frame['magic'] == protocol.FRAME_MAGIC:
-                all_payload.extend(frame['payload'])
-                frames_ok += 1
+            if rs_ok:
+                frame = decode_frame(msg_bytes)
+                if frame and frame['magic'] == protocol.FRAME_MAGIC:
+                    all_payload.extend(frame['payload'])
+                    frames_ok += 1
+                else:
+                    frames_bad += 1
             else:
+                # RS decode failed - do NOT trust raw data
                 frames_bad += 1
 
             frames_decoded += 1

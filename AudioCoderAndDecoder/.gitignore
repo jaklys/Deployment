@@ -1,0 +1,18 @@
+# Received/decoded files
+received*/
+output_*/
+
+# WAV files (generated signals and recordings)
+*.wav
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# OS
+Thumbs.db
+.DS_Store

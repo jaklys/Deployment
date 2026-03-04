@@ -18,11 +18,11 @@ SYMBOLS_PER_SEC = SAMPLE_RATE / SYMBOL_SAMPLES  # ~38.28
 # ─── Frequency allocation ─────────────────────────────────────────────
 FREQ_RESOLUTION = SAMPLE_RATE / FFT_SIZE  # ~43.07 Hz per bin
 BIN_LOW = 7                  # ~301 Hz  (first usable bin)
-BIN_HIGH = 464               # ~19986 Hz (last usable bin)
+BIN_HIGH = 455               # ~19599 Hz (last usable bin, avoids dead zone)
 
 # Pilot bins - 10 evenly spaced across the band for AGC tracking
 # and channel estimation. Known BPSK values on these bins.
-PILOT_BINS = [10, 60, 110, 160, 210, 260, 310, 360, 410, 460]
+PILOT_BINS = [10, 60, 110, 160, 210, 260, 310, 360, 410, 450]
 PILOT_AMPLITUDE = 1.0
 
 # Data bins - all usable bins except pilots
@@ -30,7 +30,7 @@ PILOT_AMPLITUDE = 1.0
 # Due to Hermitian symmetry, only bins 1..FFT_SIZE//2-1 carry independent data.
 _pilot_set = set(PILOT_BINS)
 DATA_BINS = [b for b in range(BIN_LOW, BIN_HIGH + 1) if b not in _pilot_set]
-NUM_DATA_BINS = len(DATA_BINS)  # ~448
+NUM_DATA_BINS = len(DATA_BINS)  # ~439
 
 # ─── Modulation profiles ──────────────────────────────────────────────
 PROFILES = {
@@ -167,6 +167,36 @@ def estimate_duration(data_bytes, profile_name):
     overhead = (SILENCE_SAMPLES * 2 +
                 (PREAMBLE_SYMBOLS + TRAINING_SYMBOLS) * SYMBOL_SAMPLES) / SAMPLE_RATE
     return data_duration + overhead
+
+
+# ─── Calibration ─────────────────────────────────────────────────────
+CALIBRATION_SEED = 0xCA
+CALIBRATION_PROFILES = ["safe", "standard", "fast", "turbo"]
+
+
+def generate_calibration_data(num_bytes, seed=CALIBRATION_SEED):
+    """Generate deterministic byte sequence for calibration verification.
+
+    Identical output on both encoder and decoder for same seed.
+    Uses the same LFSR as generate_pn_sequence but produces bytes.
+    """
+    state = seed if seed != 0 else 1
+    data = bytearray()
+    for _ in range(num_bytes):
+        byte_val = 0
+        for _ in range(8):
+            bit = state & 1
+            feedback = ((state >> 7) ^ (state >> 5) ^ (state >> 4) ^ (state >> 3)) & 1
+            state = ((state << 1) | feedback) & 0xFF
+            byte_val = (byte_val << 1) | bit
+        data.append(byte_val)
+    return bytes(data)
+
+
+def calibration_frame_seed(profile_name, frame_index):
+    """Deterministic seed for calibration frame payload."""
+    profile_offset = {"safe": 0, "standard": 32, "fast": 64, "turbo": 96}
+    return (CALIBRATION_SEED + profile_offset[profile_name] + frame_index) & 0xFF
 
 
 # ─── PN Sequence Generator ────────────────────────────────────────────

@@ -66,6 +66,11 @@ def detect_preamble(signal, threshold=0.7):
     R_sq[R_sq < 1e-20] = 1e-20  # avoid division by zero
     M = P ** 2 / R_sq
 
+    # Gate: ignore positions where signal energy is too low (noise)
+    # R is energy of L samples; minimum RMS ~ 0.005 means R_min = L * 0.005^2
+    R_min = L * 0.005 ** 2
+    M[R < R_min] = 0.0
+
     # Find peak above threshold
     above = M > threshold
     if not np.any(above):
@@ -223,6 +228,87 @@ def equalize_symbol(rx_freq, H):
     return eq
 
 
+class PhaseTracker:
+    """
+    Incremental phase drift tracker for sample clock offset compensation.
+
+    Instead of fitting absolute pilot phases each symbol (which fails when
+    accumulated drift exceeds ±π between adjacent pilots), this tracks the
+    drift incrementally: each symbol only needs to correct a small delta.
+    """
+
+    def __init__(self):
+        self.alpha = 0.0  # accumulated common phase offset
+        self.beta = 0.0   # accumulated phase slope (rad/bin)
+        self.initialized = False
+
+    def correct(self, eq_symbol, pilot_bins, expected_pilot_vals):
+        """Apply accumulated + incremental phase correction."""
+        if len(pilot_bins) < 2:
+            return eq_symbol
+
+        expected = np.array(expected_pilot_vals, dtype=complex)
+        expected_mag = np.abs(expected)
+        valid = expected_mag > 0.01
+        if np.sum(valid) < 2:
+            return eq_symbol
+
+        pilot_k = np.array(pilot_bins, dtype=float)[valid]
+
+        if not self.initialized:
+            # First symbol: fit from scratch with unwrapping
+            received = eq_symbol[pilot_bins]
+            ratios = received[valid] / expected[valid]
+            phase_errors = np.unwrap(np.angle(ratios))
+            self.beta, self.alpha = np.polyfit(pilot_k, phase_errors, 1)
+            self.initialized = True
+        else:
+            # Apply current estimate, measure residual, update
+            all_bins = np.arange(len(eq_symbol))
+            pre_correction = np.exp(-1j * (self.alpha + self.beta * all_bins))
+            corrected = eq_symbol * pre_correction
+
+            received = corrected[pilot_bins]
+            ratios = received[valid] / expected[valid]
+            residual_phases = np.angle(ratios)  # small residuals, no unwrap needed
+
+            d_beta, d_alpha = np.polyfit(pilot_k, residual_phases, 1)
+            self.alpha += d_alpha
+            self.beta += d_beta
+
+        # Apply full correction
+        all_bins = np.arange(len(eq_symbol))
+        correction = np.exp(-1j * (self.alpha + self.beta * all_bins))
+        return eq_symbol * correction
+
+
+def correct_phase_drift(eq_symbol, pilot_bins, expected_pilot_vals):
+    """
+    Stateless single-symbol phase correction (used when no tracker is available).
+    Fits α + β·k to unwrapped pilot phase errors.
+    """
+    if len(pilot_bins) < 2:
+        return eq_symbol
+
+    received_pilots = eq_symbol[pilot_bins]
+    expected = np.array(expected_pilot_vals, dtype=complex)
+
+    expected_mag = np.abs(expected)
+    valid = expected_mag > 0.01
+    if np.sum(valid) < 2:
+        return eq_symbol
+
+    ratios = received_pilots[valid] / expected[valid]
+    phase_errors = np.unwrap(np.angle(ratios))
+    pilot_k = np.array(pilot_bins, dtype=float)[valid]
+
+    beta, alpha = np.polyfit(pilot_k, phase_errors, 1)
+
+    all_bins = np.arange(len(eq_symbol))
+    correction = np.exp(-1j * (alpha + beta * all_bins))
+    return eq_symbol * correction
+
+
 def compensate_agc(eq_symbol, pilot_bins, expected_pilot_vals):
     """
     Compensate for AGC gain changes using pilot tones.
@@ -307,7 +393,8 @@ def demap_symbol_vectorized(eq_values, modulation):
 
 # ─── Full Symbol Demodulation ──────────────────────────────────────────
 
-def demodulate_data_symbol(signal, symbol_start, H, profile_name, symbol_index):
+def demodulate_data_symbol(signal, symbol_start, H, profile_name, symbol_index,
+                           phase_tracker=None):
     """
     Demodulate one data symbol: extract bits from an OFDM symbol.
 
@@ -317,6 +404,7 @@ def demodulate_data_symbol(signal, symbol_start, H, profile_name, symbol_index):
         H: channel estimate
         profile_name: modulation profile
         symbol_index: running index for pilot pattern
+        phase_tracker: optional PhaseTracker for incremental drift correction
 
     Returns:
         list of 0/1 bit values
@@ -331,10 +419,18 @@ def demodulate_data_symbol(signal, symbol_start, H, profile_name, symbol_index):
     # Equalize
     eq = equalize_symbol(rx_freq, H)
 
-    # AGC compensation via pilots
+    # Pilot reference for this symbol
     pilot_vals = protocol.generate_pn_sequence(len(protocol.PILOT_BINS),
                                                 seed=(protocol.PN_SEED + symbol_index) & 0xFF)
     expected_pilots = [complex(v * protocol.PILOT_AMPLITUDE, 0) for v in pilot_vals]
+
+    # Phase drift correction (fixes sample clock offset between TX/RX)
+    if phase_tracker is not None:
+        eq = phase_tracker.correct(eq, protocol.PILOT_BINS, expected_pilots)
+    else:
+        eq = correct_phase_drift(eq, protocol.PILOT_BINS, expected_pilots)
+
+    # AGC compensation via pilots
     eq = compensate_agc(eq, protocol.PILOT_BINS, expected_pilots)
 
     # Extract data from data bins

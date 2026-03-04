@@ -209,6 +209,55 @@ def estimate_channel(signal, preamble_start):
     return H, data_start
 
 
+def estimate_channel_retrain(signal, retrain_start):
+    """
+    Re-estimate channel from periodic re-training symbols.
+
+    Uses RETRAIN_SYMBOLS symbols at the given position (same known
+    patterns as initial training: seeds 0xC0, 0xC1, ...).
+
+    Args:
+        signal: numpy array of audio samples
+        retrain_start: sample index where re-training symbols begin
+
+    Returns:
+        H: numpy array of complex channel estimates (FFT_SIZE elements)
+    """
+    sym_len = protocol.SYMBOL_SAMPLES
+    n = protocol.FFT_SIZE
+    all_active_bins = sorted(set(protocol.DATA_BINS) | set(protocol.PILOT_BINS))
+
+    h_sum = np.zeros(n, dtype=complex)
+    h_count = np.zeros(n, dtype=float)
+
+    for sym_idx in range(protocol.RETRAIN_SYMBOLS):
+        sym_start = retrain_start + sym_idx * sym_len
+        rx_freq = extract_symbol(signal, sym_start)
+
+        pn = protocol.generate_pn_sequence(len(all_active_bins),
+                                            seed=(0xC0 + sym_idx) & 0xFF)
+
+        tx_freq = np.zeros(n, dtype=complex)
+        for i, bin_idx in enumerate(all_active_bins):
+            tx_freq[bin_idx] = complex(pn[i], 0)
+
+        for k in range(1, n // 2):
+            tx_freq[n - k] = np.conj(tx_freq[k])
+        tx_freq[0] = 0
+        tx_freq[n // 2] = tx_freq[n // 2].real
+
+        for bin_idx in all_active_bins:
+            if abs(tx_freq[bin_idx]) > 0.01:
+                h_sum[bin_idx] += rx_freq[bin_idx] / tx_freq[bin_idx]
+                h_count[bin_idx] += 1
+
+    h_est = np.zeros(n, dtype=complex)
+    nonzero = h_count > 0
+    h_est[nonzero] = h_sum[nonzero] / h_count[nonzero]
+
+    return h_est
+
+
 # ─── Equalization and Demapping ────────────────────────────────────────
 
 def equalize_symbol(rx_freq, H):
@@ -232,18 +281,38 @@ class PhaseTracker:
     """
     Incremental phase drift tracker for sample clock offset compensation.
 
-    Instead of fitting absolute pilot phases each symbol (which fails when
-    accumulated drift exceeds ±π between adjacent pilots), this tracks the
-    drift incrementally: each symbol only needs to correct a small delta.
+    Uses a two-phase approach:
+    1. Warmup: full pilot-based tracking to estimate SCO rate
+    2. Post-warmup: deterministic beta prediction (never updated from pilots)
+       + median pilot correction for alpha only
+
+    Beta (phase slope) is driven by constant SCO, so after warmup it is
+    predicted deterministically. Only alpha (common phase offset) is
+    measured from pilots using median for robustness.
     """
+
+    WARMUP_SYMBOLS = 30  # short warmup since chunks are only ~100 symbols
 
     def __init__(self):
         self.alpha = 0.0  # accumulated common phase offset
         self.beta = 0.0   # accumulated phase slope (rad/bin)
         self.initialized = False
+        self.symbol_count = 0
+        # Warmup data for SCO estimation
+        self._beta_log = []   # (index, beta) pairs during warmup
+        self._alpha_log = []  # (index, alpha) pairs during warmup
+        # Post-warmup prediction
+        self._sco_estimated = False
+        self._beta_rate = 0.0
+        self._alpha_rate = 0.0
 
     def correct(self, eq_symbol, pilot_bins, expected_pilot_vals):
-        """Apply accumulated + incremental phase correction."""
+        """
+        Apply accumulated + incremental phase correction.
+
+        During warmup: full pilot-based tracking with unwrap.
+        After warmup: deterministic beta prediction + median alpha correction.
+        """
         if len(pilot_bins) < 2:
             return eq_symbol
 
@@ -254,6 +323,8 @@ class PhaseTracker:
             return eq_symbol
 
         pilot_k = np.array(pilot_bins, dtype=float)[valid]
+        n = len(eq_symbol)
+        all_bins = np.arange(n)
 
         if not self.initialized:
             # First symbol: fit from scratch with unwrapping
@@ -261,24 +332,64 @@ class PhaseTracker:
             ratios = received[valid] / expected[valid]
             phase_errors = np.unwrap(np.angle(ratios))
             self.beta, self.alpha = np.polyfit(pilot_k, phase_errors, 1)
+            self._beta_log.append((0, self.beta))
+            self._alpha_log.append((0, self.alpha))
             self.initialized = True
-        else:
-            # Apply current estimate, measure residual, update
-            all_bins = np.arange(len(eq_symbol))
+
+        elif self.symbol_count < self.WARMUP_SYMBOLS:
+            # Warmup: full pilot-based tracking to build SCO estimate
             pre_correction = np.exp(-1j * (self.alpha + self.beta * all_bins))
             corrected = eq_symbol * pre_correction
 
             received = corrected[pilot_bins]
             ratios = received[valid] / expected[valid]
-            residual_phases = np.angle(ratios)  # small residuals, no unwrap needed
+            residual_phases = np.unwrap(np.angle(ratios))
 
             d_beta, d_alpha = np.polyfit(pilot_k, residual_phases, 1)
             self.alpha += d_alpha
             self.beta += d_beta
 
+            self._beta_log.append((self.symbol_count, self.beta))
+            self._alpha_log.append((self.symbol_count, self.alpha))
+
+        else:
+            # Post-warmup: estimate SCO rate once
+            if not self._sco_estimated:
+                idxs = np.array([x[0] for x in self._beta_log])
+                betas = np.array([x[1] for x in self._beta_log])
+                self._beta_rate, _ = np.polyfit(idxs, betas, 1)
+
+                alphas = np.array([x[1] for x in self._alpha_log])
+                self._alpha_rate, _ = np.polyfit(idxs, alphas, 1)
+                self._sco_estimated = True
+
+            # Predict from estimated SCO rate
+            self.beta += self._beta_rate
+            self.alpha += self._alpha_rate
+
+            # Measure pilot residuals after prediction
+            pre_correction = np.exp(-1j * (self.alpha + self.beta * all_bins))
+            corrected = eq_symbol * pre_correction
+
+            received = corrected[pilot_bins]
+            ratios = received[valid] / expected[valid]
+            residual_phases = np.unwrap(np.angle(ratios))
+
+            # Fit residual slope to detect beta prediction error
+            d_beta, _ = np.polyfit(pilot_k, residual_phases, 1)
+
+            # Very slow beta correction (K=0.03) - prevents long-term drift
+            # from beta_rate estimation error without random walk accumulation.
+            # Noise: K*sigma*sqrt(N) << decision boundary for 16-QAM
+            # Systematic: converges to true rate in ~1/K symbols
+            self.beta += d_beta * 0.03
+
+            # Median alpha correction (robust to outliers)
+            self.alpha += np.median(residual_phases)
+
         # Apply full correction
-        all_bins = np.arange(len(eq_symbol))
         correction = np.exp(-1j * (self.alpha + self.beta * all_bins))
+        self.symbol_count += 1
         return eq_symbol * correction
 
 

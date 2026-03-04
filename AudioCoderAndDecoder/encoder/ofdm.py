@@ -298,6 +298,48 @@ def generate_training_symbols():
     return samples, freq_refs
 
 
+def generate_retrain_symbols(retrain_index=0):
+    """
+    Generate periodic re-training symbols (RETRAIN_SYMBOLS count).
+
+    Same structure as initial training symbols but with a seed offset
+    based on retrain_index, so the decoder can verify alignment.
+
+    Args:
+        retrain_index: which re-training block this is (0-based)
+
+    Returns:
+        list of float samples
+    """
+    n = protocol.FFT_SIZE
+    all_active_bins = sorted(set(protocol.DATA_BINS) | set(protocol.PILOT_BINS))
+
+    samples = []
+
+    for sym_idx in range(protocol.RETRAIN_SYMBOLS):
+        # Use same seed formula as initial training (0xC0 + sym_idx)
+        # so the decoder can use the same channel estimation code
+        pn = protocol.generate_pn_sequence(len(all_active_bins),
+                                            seed=(0xC0 + sym_idx) & 0xFF)
+
+        freq = [complex(0)] * n
+        for i, bin_idx in enumerate(all_active_bins):
+            freq[bin_idx] = complex(pn[i], 0)
+
+        # Hermitian symmetry
+        freq[0] = complex(0)
+        for k in range(1, n // 2):
+            freq[n - k] = complex(freq[k].real, -freq[k].imag)
+        freq[n // 2] = complex(freq[n // 2].real, 0)
+
+        td = ifft(freq)
+        real_td = [s.real for s in td]
+        cp = real_td[-protocol.CP_LENGTH:]
+        samples.extend(cp + real_td)
+
+    return samples
+
+
 # ─── Normalization ─────────────────────────────────────────────────────
 
 def normalize_samples(samples, peak=0.9):

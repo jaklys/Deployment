@@ -206,12 +206,28 @@ def demodulate_frames(signal, preamble_start, H, data_start, profile_name):
     all_payload = bytearray()
     frames_ok = 0
     frames_bad = 0
+    is_chunked = metadata.get("chunked", False) if metadata else False
+    retrain_count = 0
     sym_idx_global = data_sym_start_idx
-    data_pilot_idx = 0  # pilot index matches encoder (starts at 0 for data)
+    chunk_sym_count = 0  # data symbols since last re-training
+    data_pilot_idx = 0   # pilot index matches encoder (starts at 0 for data)
     data_phase_tracker = ofdm_fast.PhaseTracker()
     frames_decoded = 0
 
     for batch_idx in range(num_batches):
+        # Check if we need to consume re-training symbols (resync)
+        if is_chunked and chunk_sym_count >= protocol.CHUNK_SYMBOLS:
+            retrain_start = data_start + sym_idx_global * sym_len
+            # Re-estimate channel from re-training symbols
+            H = ofdm_fast.estimate_channel_retrain(signal, retrain_start)
+            # Skip re-training symbols
+            sym_idx_global += protocol.RETRAIN_SYMBOLS
+            # Reset phase tracker for fresh tracking in new chunk
+            data_phase_tracker = ofdm_fast.PhaseTracker()
+            # NOTE: do NOT reset data_pilot_idx - encoder keeps counting
+            chunk_sym_count = 0
+            retrain_count += 1
+
         # Demodulate symbols for this batch
         batch_bit_list = []
         for s in range(syms_per_batch):
@@ -224,6 +240,7 @@ def demodulate_frames(signal, preamble_start, H, data_start, profile_name):
             batch_bit_list.extend(bits)
             sym_idx_global += 1
             data_pilot_idx += 1
+            chunk_sym_count += 1
 
         if len(batch_bit_list) < batch_bits:
             batch_bit_list.extend([0] * (batch_bits - len(batch_bit_list)))
@@ -279,6 +296,7 @@ def demodulate_frames(signal, preamble_start, H, data_start, profile_name):
         'frames_bad': frames_bad,
         'fec_corrected': fec_corrected,
         'total_symbols': sym_idx_global,
+        'retrain_count': retrain_count,
         'data_bytes': len(all_payload),
     }
 

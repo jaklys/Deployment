@@ -78,6 +78,7 @@ def compress_path(input_path):
         "original_size": total_size,
         "compressed_size": len(compressed),
         "sha256": sha256,
+        "chunked": True,
     }
 
     return compressed, metadata
@@ -341,12 +342,21 @@ def encode(input_path, output_wav, profile_name="standard", play=False):
     meta_samples, meta_sym_count = encode_frame_to_symbols(meta_frame, "safe")
     all_samples.extend(meta_samples)
 
-    # Data frames - batched with interleaving
+    # Data frames - batched with interleaving, with periodic re-training
     total_data_syms = 0
+    chunk_sym_count = 0  # symbols since last re-training
+    retrain_count = 0    # how many re-training blocks inserted
     depth = protocol.INTERLEAVE_DEPTH
     num_batches = (len(data_frames) + depth - 1) // depth
 
     for batch_idx in range(num_batches):
+        # Insert re-training symbols if chunk limit reached
+        if chunk_sym_count >= protocol.CHUNK_SYMBOLS and batch_idx < num_batches:
+            retrain_samples = ofdm.generate_retrain_symbols(retrain_count)
+            all_samples.extend(retrain_samples)
+            retrain_count += 1
+            chunk_sym_count = 0
+
         batch_start = batch_idx * depth
         batch_end = min(batch_start + depth, len(data_frames))
         batch = data_frames[batch_start:batch_end]
@@ -359,6 +369,7 @@ def encode(input_path, output_wav, profile_name="standard", play=False):
             batch, profile_name, sym_offset=total_data_syms)
         all_samples.extend(batch_samples)
         total_data_syms += sym_count
+        chunk_sym_count += sym_count
 
         frames_done = min(batch_end, len(data_frames))
         audio_out.print_progress(frames_done, len(data_frames), "Encoding")
@@ -383,7 +394,7 @@ def encode(input_path, output_wav, profile_name="standard", play=False):
     print(f"  WAV file: {output_wav}")
     print(f"  WAV size: {wav_size:,} bytes ({wav_size/1024/1024:.1f} MB)")
     print(f"  WAV duration: {wav_duration:.1f}s ({wav_duration/60:.1f} min)")
-    print(f"  OFDM symbols: {meta_sym_count} (meta) + {total_data_syms} (data)")
+    print(f"  OFDM symbols: {meta_sym_count} (meta) + {total_data_syms} (data) + {retrain_count * protocol.RETRAIN_SYMBOLS} (retrain)")
     print(f"  Encoding time: {t_encode:.1f}s")
     actual_rate = metadata['compressed_size'] / wav_duration if wav_duration > 0 else 0
     print(f"  Effective data rate: {actual_rate:.0f} B/s ({actual_rate/1024:.1f} kB/s)")

@@ -79,6 +79,12 @@ PREAMBLE_SYMBOLS = 2         # Schmidl-Cox preamble (2 symbols)
 TRAINING_SYMBOLS = 4         # known pattern for channel estimation
 SILENCE_SAMPLES = int(SAMPLE_RATE * 0.5)  # 0.5s silence padding
 
+# ─── Periodic re-training (chunked mode) ─────────────────────────────
+# Insert re-training symbols every CHUNK_SYMBOLS data symbols to maintain
+# synchronization on long signals (prevents phase drift divergence).
+CHUNK_SYMBOLS = 100          # data symbols per chunk before re-training
+RETRAIN_SYMBOLS = 2          # training symbols inserted between chunks
+
 # Pseudo-random seed for generating known sequences
 PN_SEED = 0x42               # fixed seed for reproducible PN sequences
 

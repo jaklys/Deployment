@@ -279,39 +279,25 @@ def equalize_symbol(rx_freq, H):
 
 class PhaseTracker:
     """
-    Incremental phase drift tracker for sample clock offset compensation.
+    EMA-based phase drift tracker for sample clock offset compensation.
 
-    Uses a two-phase approach:
-    1. Warmup: full pilot-based tracking to estimate SCO rate
-    2. Post-warmup: deterministic beta prediction (never updated from pilots)
-       + median pilot correction for alpha only
-
-    Beta (phase slope) is driven by constant SCO, so after warmup it is
-    predicted deterministically. Only alpha (common phase offset) is
-    measured from pilots using median for robustness.
+    Instead of accumulating incremental corrections (random walk divergence)
+    or using stateless fits (no memory), blends absolute pilot measurements
+    via exponential moving average. This gives:
+    - Bounded noise variance (unlike accumulation)
+    - Memory from previous symbols (unlike stateless)
+    - Constant tracking lag proportional to SCO rate / EMA_K
     """
 
-    WARMUP_SYMBOLS = 30  # short warmup since chunks are only ~100 symbols
+    EMA_K = 0.3  # blending factor: higher = more responsive but noisier
 
     def __init__(self):
-        self.alpha = 0.0  # accumulated common phase offset
-        self.beta = 0.0   # accumulated phase slope (rad/bin)
-        self.initialized = False
-        self.symbol_count = 0
-        # Warmup data for SCO estimation
-        self._beta_log = []   # (index, beta) pairs during warmup
-        self._alpha_log = []  # (index, alpha) pairs during warmup
-        # Post-warmup prediction
-        self._sco_estimated = False
-        self._beta_rate = 0.0
-        self._alpha_rate = 0.0
+        self.alpha = None   # total phase offset (None = not initialized)
+        self.beta = None    # total phase slope (rad/bin)
 
     def correct(self, eq_symbol, pilot_bins, expected_pilot_vals):
         """
-        Apply accumulated + incremental phase correction.
-
-        During warmup: full pilot-based tracking with unwrap.
-        After warmup: deterministic beta prediction + median alpha correction.
+        Measure absolute phase error from pilots, blend with EMA, correct.
         """
         if len(pilot_bins) < 2:
             return eq_symbol
@@ -326,70 +312,24 @@ class PhaseTracker:
         n = len(eq_symbol)
         all_bins = np.arange(n)
 
-        if not self.initialized:
-            # First symbol: fit from scratch with unwrapping
-            received = eq_symbol[pilot_bins]
-            ratios = received[valid] / expected[valid]
-            phase_errors = np.unwrap(np.angle(ratios))
-            self.beta, self.alpha = np.polyfit(pilot_k, phase_errors, 1)
-            self._beta_log.append((0, self.beta))
-            self._alpha_log.append((0, self.alpha))
-            self.initialized = True
+        # Measure absolute phase error from pilots
+        received = eq_symbol[np.array(pilot_bins)]
+        ratios = received[valid] / expected[valid]
+        phase_errors = np.unwrap(np.angle(ratios))
+        beta_meas, alpha_meas = np.polyfit(pilot_k, phase_errors, 1)
 
-        elif self.symbol_count < self.WARMUP_SYMBOLS:
-            # Warmup: full pilot-based tracking to build SCO estimate
-            pre_correction = np.exp(-1j * (self.alpha + self.beta * all_bins))
-            corrected = eq_symbol * pre_correction
-
-            received = corrected[pilot_bins]
-            ratios = received[valid] / expected[valid]
-            residual_phases = np.unwrap(np.angle(ratios))
-
-            d_beta, d_alpha = np.polyfit(pilot_k, residual_phases, 1)
-            self.alpha += d_alpha
-            self.beta += d_beta
-
-            self._beta_log.append((self.symbol_count, self.beta))
-            self._alpha_log.append((self.symbol_count, self.alpha))
-
+        if self.alpha is None:
+            # First symbol: use measurement directly
+            self.alpha = alpha_meas
+            self.beta = beta_meas
         else:
-            # Post-warmup: estimate SCO rate once
-            if not self._sco_estimated:
-                idxs = np.array([x[0] for x in self._beta_log])
-                betas = np.array([x[1] for x in self._beta_log])
-                self._beta_rate, _ = np.polyfit(idxs, betas, 1)
+            # EMA blend: smooth noisy measurements while tracking drift
+            K = self.EMA_K
+            self.alpha = (1 - K) * self.alpha + K * alpha_meas
+            self.beta = (1 - K) * self.beta + K * beta_meas
 
-                alphas = np.array([x[1] for x in self._alpha_log])
-                self._alpha_rate, _ = np.polyfit(idxs, alphas, 1)
-                self._sco_estimated = True
-
-            # Predict from estimated SCO rate
-            self.beta += self._beta_rate
-            self.alpha += self._alpha_rate
-
-            # Measure pilot residuals after prediction
-            pre_correction = np.exp(-1j * (self.alpha + self.beta * all_bins))
-            corrected = eq_symbol * pre_correction
-
-            received = corrected[pilot_bins]
-            ratios = received[valid] / expected[valid]
-            residual_phases = np.unwrap(np.angle(ratios))
-
-            # Fit residual slope to detect beta prediction error
-            d_beta, _ = np.polyfit(pilot_k, residual_phases, 1)
-
-            # Very slow beta correction (K=0.03) - prevents long-term drift
-            # from beta_rate estimation error without random walk accumulation.
-            # Noise: K*sigma*sqrt(N) << decision boundary for 16-QAM
-            # Systematic: converges to true rate in ~1/K symbols
-            self.beta += d_beta * 0.03
-
-            # Median alpha correction (robust to outliers)
-            self.alpha += np.median(residual_phases)
-
-        # Apply full correction
+        # Apply correction
         correction = np.exp(-1j * (self.alpha + self.beta * all_bins))
-        self.symbol_count += 1
         return eq_symbol * correction
 
 

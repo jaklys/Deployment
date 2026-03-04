@@ -172,6 +172,7 @@ def demodulate_frames(signal, preamble_start, H, data_start, profile_name):
             metadata = json.loads(meta_json)
             print(f"  Metadata: {metadata['name']} "
                   f"({metadata['compressed_size']} bytes compressed)")
+            print(f"  Chunked: {metadata.get('chunked', False)}")
         except (json.JSONDecodeError, UnicodeDecodeError, KeyError) as e:
             print(f"  WARNING: Failed to parse metadata: {e}")
 
@@ -214,10 +215,29 @@ def demodulate_frames(signal, preamble_start, H, data_start, profile_name):
     data_phase_tracker = ofdm_fast.PhaseTracker()
     frames_decoded = 0
 
+    # SCO timing compensation: estimate from first chunk's phase slope growth,
+    # then adjust symbol extraction positions to prevent CP exhaustion.
+    sco_estimated = False
+    sco_samples_per_sym = 0.0  # fractional sample drift per symbol
+    beta_history = []           # (sym_idx, beta) for SCO estimation
+
     for batch_idx in range(num_batches):
         # Check if we need to consume re-training symbols (resync)
         if is_chunked and chunk_sym_count >= protocol.CHUNK_SYMBOLS:
-            retrain_start = data_start + sym_idx_global * sym_len
+            # Estimate SCO from first chunk's beta trend
+            if not sco_estimated and len(beta_history) >= 20:
+                idxs = np.array([b[0] for b in beta_history])
+                betas = np.array([b[1] for b in beta_history])
+                beta_rate, _ = np.polyfit(idxs, betas, 1)
+                sco_samples_per_sym = -beta_rate * protocol.FFT_SIZE / (2 * np.pi)
+                sco_estimated = True
+                sco_ppm = sco_samples_per_sym / sym_len * 1e6
+                print(f"  SCO estimated: {sco_samples_per_sym:.4f} samples/symbol "
+                      f"({sco_ppm:.1f} ppm), from {len(beta_history)} points")
+
+            # Timing-corrected retrain position
+            timing_off = int(round(sym_idx_global * sco_samples_per_sym))
+            retrain_start = data_start + sym_idx_global * sym_len + timing_off
             # Re-estimate channel from re-training symbols
             H = ofdm_fast.estimate_channel_retrain(signal, retrain_start)
             # Skip re-training symbols
@@ -233,11 +253,16 @@ def demodulate_frames(signal, preamble_start, H, data_start, profile_name):
         for s in range(syms_per_batch):
             if sym_idx_global >= max_symbols:
                 break
-            sym_start = data_start + sym_idx_global * sym_len
+            # Apply SCO timing correction to symbol position
+            timing_off = int(round(sym_idx_global * sco_samples_per_sym))
+            sym_start = data_start + sym_idx_global * sym_len + timing_off
             bits = ofdm_fast.demodulate_data_symbol(
                 signal, sym_start, H, profile_name, data_pilot_idx,
                 phase_tracker=data_phase_tracker)
             batch_bit_list.extend(bits)
+            # Collect beta for SCO estimation during first chunk
+            if not sco_estimated and data_phase_tracker.beta is not None:
+                beta_history.append((sym_idx_global, data_phase_tracker.beta))
             sym_idx_global += 1
             data_pilot_idx += 1
             chunk_sym_count += 1

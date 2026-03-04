@@ -9,7 +9,7 @@ An identical copy lives in decoder/protocol.py.
 import math
 
 # ─── Signal parameters ────────────────────────────────────────────────
-SAMPLE_RATE = 44100          # Hz
+SAMPLE_RATE = 48000          # Hz
 FFT_SIZE = 1024              # samples per OFDM symbol (power of 2)
 CP_LENGTH = 128              # cyclic prefix length (1/8 of FFT_SIZE)
 SYMBOL_SAMPLES = FFT_SIZE + CP_LENGTH  # 1152 total samples per symbol
